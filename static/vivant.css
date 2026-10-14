@@ -1,0 +1,819 @@
+/* ==========================================================================
+   Clinique Tchiva — couche « vivante » (animations, profondeur, interactions)
+   Chargée après style.css. Additive : aucune règle métier, aucun texte modifié.
+   Respecte prefers-reduced-motion. Aucune ressource externe (CSP 'self').
+   ========================================================================== */
+
+:root {
+  --v-green-1: #145c4b;
+  --v-green-2: #1f8a6e;
+  --v-green-3: #2fb08a;
+  --v-gold: #bc8f46;
+  --v-gold-soft: #f3e7cf;
+  --v-glow: 0 18px 50px -12px rgba(20, 92, 75, 0.45);
+  --v-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --v-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --v-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.08  0 0 0 0 0.25  0 0 0 0 0.2  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* ---------- 1. Entrée de page -------------------------------------------- */
+@keyframes v-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes v-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes v-scale-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: none; }
+}
+#app > * {
+  animation: v-fade 0.6s var(--v-ease) both;
+}
+.hero-copy > * {
+  animation: v-rise 0.8s var(--v-ease) both;
+}
+.hero-copy > *:nth-child(1) { animation-delay: 0.05s; }
+.hero-copy > *:nth-child(2) { animation-delay: 0.15s; }
+.hero-copy > *:nth-child(3) { animation-delay: 0.25s; }
+.hero-copy > *:nth-child(4) { animation-delay: 0.35s; }
+.hero-visual {
+  animation: v-scale-in 1s var(--v-ease) 0.2s both;
+}
+
+/* Barre de progression de lecture (injectée par vivant.js) */
+.v-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, var(--v-green-3), var(--v-gold));
+  z-index: 60;
+  pointer-events: none;
+  transition: transform 0.12s linear;
+}
+
+/* ---------- 2. En-tête : compact et ombré au défilement ------------------- */
+.site-header {
+  transition: box-shadow 0.35s var(--v-ease), background 0.35s var(--v-ease);
+}
+.site-header.v-scrolled {
+  box-shadow: 0 10px 30px -18px rgba(20, 62, 53, 0.45);
+  background: rgba(255, 255, 255, 0.92);
+}
+.site-header.v-scrolled .header-inner {
+  height: 74px;
+}
+.header-inner {
+  transition: height 0.35s var(--v-ease);
+}
+.brand-mark {
+  transition: transform 0.6s var(--v-ease-spring);
+}
+.brand:hover .brand-mark {
+  transform: rotate(-8deg) scale(1.08);
+}
+.nav a {
+  transition: color 0.25s;
+}
+.nav a:not(.active):after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 20px;
+  height: 2px;
+  width: 100%;
+  border-radius: 2px;
+  background: var(--v-gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.35s var(--v-ease);
+}
+.nav a:not(.active):hover {
+  color: var(--v-green-1);
+}
+.nav a:not(.active):hover:after {
+  transform: scaleX(1);
+}
+.nav a.active:after {
+  width: 100%;
+  transition: width 0.4s var(--v-ease);
+}
+
+/* ---------- 3. Boutons : brillance, élévation, pression ------------------ */
+.btn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: linear-gradient(135deg, var(--v-green-1) 0%, var(--v-green-2) 100%);
+  box-shadow: 0 8px 22px -10px rgba(20, 92, 75, 0.6);
+  transition:
+    transform 0.25s var(--v-ease),
+    box-shadow 0.35s var(--v-ease),
+    background-position 0.5s var(--v-ease);
+  background-size: 160% 100%;
+  background-position: 0% 50%;
+}
+.btn:after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -75%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0.35) 50%, transparent 100%);
+  transform: skewX(-20deg);
+  transition: left 0.7s var(--v-ease);
+  z-index: -1;
+}
+.btn:hover {
+  background: linear-gradient(135deg, var(--v-green-1) 0%, var(--v-green-2) 100%);
+  background-position: 100% 50%;
+  transform: translateY(-2px);
+  box-shadow: var(--v-glow);
+}
+.btn:hover:after {
+  left: 130%;
+}
+.btn:active {
+  transform: translateY(0) scale(0.98);
+}
+.btn .ico {
+  transition: transform 0.35s var(--v-ease);
+}
+.btn:hover .ico {
+  transform: translateX(3px);
+}
+.btn.light {
+  background: #fff;
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.25);
+}
+.btn.light:hover {
+  background: #fff;
+  color: var(--v-green-1);
+}
+.btn.light:after {
+  background: linear-gradient(105deg, transparent 0%, rgba(20, 92, 75, 0.12) 50%, transparent 100%);
+}
+.btn.secondary {
+  transition: transform 0.25s var(--v-ease), border-color 0.25s, color 0.25s, background 0.25s;
+}
+.btn.secondary:hover {
+  background: var(--v-green-1);
+  color: #fff;
+  border-color: var(--v-green-1);
+}
+.text-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.text-link:after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 22px;
+  bottom: -3px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0.0);
+  transform-origin: right;
+  transition: transform 0.4s var(--v-ease);
+}
+.text-link:hover:after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+.text-link .ico {
+  transition: transform 0.35s var(--v-ease);
+}
+.text-link:hover .ico {
+  transform: translateX(5px);
+}
+
+/* ---------- 4. Hero : halo animé, grain, photo flottante ----------------- */
+.hero {
+  isolation: isolate;
+}
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--v-grain);
+  opacity: 0.6;
+  z-index: -1;
+  pointer-events: none;
+}
+.hero-grid::before,
+.hero-grid::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  z-index: -1;
+  pointer-events: none;
+}
+.hero-grid {
+  position: relative;
+}
+.hero-grid::before {
+  width: 420px;
+  height: 420px;
+  left: -140px;
+  top: 40px;
+  background: radial-gradient(circle, rgba(47, 176, 138, 0.28), transparent 70%);
+  animation: v-drift 16s ease-in-out infinite alternate;
+}
+.hero-grid::after {
+  width: 360px;
+  height: 360px;
+  right: 10%;
+  bottom: -80px;
+  background: radial-gradient(circle, rgba(188, 143, 70, 0.22), transparent 70%);
+  animation: v-drift 20s ease-in-out infinite alternate-reverse;
+}
+@keyframes v-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(40px, -30px, 0) scale(1.12); }
+}
+.location-pill {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, #e7eee3, #f2f6ee, #e7eee3);
+  background-size: 200% 100%;
+  animation: v-shimmer 6s linear infinite;
+}
+@keyframes v-shimmer {
+  from { background-position: 0% 0; }
+  to   { background-position: 200% 0; }
+}
+.location-pill .dot {
+  position: relative;
+}
+.location-pill .dot:after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--v-green-2);
+  opacity: 0;
+  animation: v-ping 2s var(--v-ease) infinite;
+}
+@keyframes v-ping {
+  0%   { transform: scale(0.5); opacity: 0.9; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.hero h1 em {
+  background: linear-gradient(100deg, var(--v-green-1) 0%, var(--v-green-3) 50%, var(--v-green-1) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: v-gradient-move 8s ease-in-out infinite alternate;
+}
+@keyframes v-gradient-move {
+  from { background-position: 0% 50%; }
+  to   { background-position: 100% 50%; }
+}
+.hero-visual {
+  position: relative;
+}
+.hero-visual::after {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: -26px;
+  height: 46px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(20, 62, 53, 0.25), transparent 70%);
+  filter: blur(8px);
+  z-index: -1;
+  animation: v-shadow-breathe 6s ease-in-out infinite;
+}
+@keyframes v-shadow-breathe {
+  0%, 100% { transform: scaleX(1); opacity: 0.9; }
+  50%      { transform: scaleX(0.86); opacity: 0.6; }
+}
+.hero-photo {
+  transition: transform 0.8s var(--v-ease), box-shadow 0.8s var(--v-ease);
+  box-shadow: 0 30px 60px -28px rgba(20, 62, 53, 0.45);
+}
+.hero-visual:hover .hero-photo {
+  transform: translateY(-4px) rotate(-0.4deg);
+  box-shadow: 0 40px 70px -28px rgba(20, 62, 53, 0.55);
+}
+.care-float {
+  animation: v-float 5.5s ease-in-out infinite;
+  transition: box-shadow 0.4s;
+}
+.care-float:hover {
+  box-shadow: 0 14px 40px -12px rgba(20, 62, 53, 0.4);
+}
+.care-float .symbol {
+  position: relative;
+  transition: transform 0.5s var(--v-ease-spring);
+}
+.care-float:hover .symbol {
+  transform: rotate(-12deg) scale(1.1);
+}
+@keyframes v-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-9px); }
+}
+.photo-tag {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.82);
+  transition: transform 0.3s var(--v-ease);
+}
+.photo-tag:hover {
+  transform: translateY(-2px);
+}
+.hero-note .ico {
+  animation: v-pulse 2.6s ease-in-out infinite;
+}
+@keyframes v-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.14); }
+}
+
+/* ---------- 5. Bandeau d'informations ------------------------------------ */
+.info-strip {
+  background: linear-gradient(180deg, #fff 0%, #fbfcf9 100%);
+}
+.info-item {
+  transition: background 0.3s var(--v-ease);
+}
+.info-item:hover {
+  background: var(--v-gold-soft);
+}
+.info-item > .ico {
+  transition: transform 0.5s var(--v-ease-spring), color 0.3s;
+}
+.info-item:hover > .ico {
+  transform: translateY(-3px) scale(1.12);
+  color: var(--v-gold);
+}
+
+/* ---------- 6. Titres de section : filet animé -------------------------- */
+.section-head .eyebrow:before,
+.eyebrow:before {
+  transform-origin: left center;
+  transition: width 0.6s var(--v-ease);
+}
+.section-head h2 {
+  position: relative;
+}
+
+/* ---------- 7. Cartes : reflet qui suit la souris, bordure d'accent ------- */
+.card {
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    transform 0.45s var(--v-ease),
+    box-shadow 0.45s var(--v-ease),
+    border-color 0.3s;
+  --mx: 50%;
+  --my: 50%;
+}
+.card:before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--v-green-3), var(--v-gold));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.6s var(--v-ease);
+  z-index: 2;
+}
+.card:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(260px circle at var(--mx) var(--my), rgba(47, 176, 138, 0.13), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.4s;
+  pointer-events: none;
+  z-index: 0;
+}
+.card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 28px 60px -26px rgba(20, 62, 53, 0.35);
+  border-color: transparent;
+}
+.card:hover:before {
+  transform: scaleX(1);
+}
+.card:hover:after {
+  opacity: 1;
+}
+.card > * {
+  position: relative;
+  z-index: 1;
+}
+.card .icon-box {
+  transition: transform 0.6s var(--v-ease-spring), background 0.4s, color 0.4s, box-shadow 0.4s;
+}
+.card:hover .icon-box {
+  transform: rotate(-8deg) scale(1.08);
+  background: linear-gradient(135deg, var(--v-green-1), var(--v-green-3));
+  color: #fff;
+  box-shadow: 0 10px 22px -10px rgba(20, 92, 75, 0.7);
+}
+.card .card-num {
+  transition: color 0.4s, transform 0.5s var(--v-ease);
+  display: inline-block;
+}
+.card:hover .card-num {
+  color: var(--v-gold);
+  transform: translateX(-3px);
+}
+.card h3 {
+  transition: color 0.3s;
+}
+.card:hover h3 {
+  color: var(--v-green-1);
+}
+
+/* ---------- 8. Section « À propos » : formes et médaillon --------------- */
+.about-art {
+  overflow: hidden;
+  isolation: isolate;
+}
+.about-art:before {
+  animation: v-spin 60s linear infinite;
+}
+.about-art:after {
+  animation: v-spin 90s linear infinite reverse;
+}
+@keyframes v-spin {
+  to { transform: rotate(360deg); }
+}
+.about-logo {
+  transition: transform 0.8s var(--v-ease-spring), filter 0.5s;
+  filter: drop-shadow(0 16px 30px rgba(20, 62, 53, 0.25));
+}
+.about-art:hover .about-logo {
+  transform: scale(1.05) rotate(-2deg);
+}
+.about-badge {
+  transition: transform 0.4s var(--v-ease), box-shadow 0.4s;
+}
+.about-badge:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 40px -18px rgba(20, 62, 53, 0.4);
+}
+.checks li {
+  transition: transform 0.3s var(--v-ease), color 0.3s;
+}
+.checks li:hover {
+  transform: translateX(6px);
+  color: var(--v-green-1);
+}
+.checks .ico {
+  transition: transform 0.4s var(--v-ease-spring);
+}
+.checks li:hover .ico {
+  transform: scale(1.25);
+  color: var(--v-gold);
+}
+
+/* ---------- 9. Étapes : numéros dégradés ---------------------------------- */
+.steps {
+  position: relative;
+}
+.step {
+  position: relative;
+  transition: transform 0.4s var(--v-ease);
+}
+.step:hover {
+  transform: translateY(-4px);
+}
+.step-number {
+  background: linear-gradient(135deg, #93ab8f, var(--v-green-3));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+  transition: transform 0.5s var(--v-ease-spring);
+}
+.step:hover .step-number {
+  transform: scale(1.12) translateX(4px);
+}
+
+/* ---------- 10. Bandeau d'appel à l'action ------------------------------- */
+.cta {
+  isolation: isolate;
+  background: linear-gradient(120deg, var(--v-green-1) 0%, #0f4a3d 45%, var(--v-green-2) 100%);
+  background-size: 200% 200%;
+  animation: v-cta-shift 14s ease-in-out infinite alternate;
+  box-shadow: 0 30px 60px -30px rgba(20, 62, 53, 0.6);
+}
+@keyframes v-cta-shift {
+  from { background-position: 0% 50%; }
+  to   { background-position: 100% 50%; }
+}
+.cta::before {
+  content: "";
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  right: -90px;
+  bottom: -140px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 0 0 40px rgba(255, 255, 255, 0.03), 0 0 0 80px rgba(255, 255, 255, 0.02);
+  animation: v-float 9s ease-in-out infinite;
+  z-index: -1;
+}
+.cta > * {
+  position: relative;
+  z-index: 1;
+}
+.cta .btn:not(.light):not(.secondary) {
+  background: #fff;
+  color: var(--v-green-1);
+}
+.cta .btn:not(.light):not(.secondary):hover {
+  background: #fff;
+  color: var(--v-green-1);
+}
+
+/* ---------- 11. Pied de page -------------------------------------------- */
+.footer {
+  background: linear-gradient(180deg, #f4f6f0 0%, #eaf0e6 100%);
+  position: relative;
+}
+.footer a:not(.brand) {
+  position: relative;
+  display: inline-block;
+  transition: color 0.25s, transform 0.25s var(--v-ease);
+}
+.footer a:not(.brand):after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 100%;
+  height: 1px;
+  background: var(--v-gold);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.35s var(--v-ease);
+}
+.footer a:not(.brand):hover {
+  transform: translateX(3px);
+}
+.footer a:not(.brand):hover:after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* ---------- 12. Bouton WhatsApp : halo pulsant -------------------------- */
+.whatsapp {
+  transition: transform 0.3s var(--v-ease-spring), box-shadow 0.3s;
+}
+.whatsapp:before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid var(--v-green-2);
+  opacity: 0;
+  animation: v-ping 2.8s var(--v-ease) infinite;
+  pointer-events: none;
+}
+.whatsapp:hover {
+  transform: scale(1.1) rotate(-6deg);
+  box-shadow: var(--v-glow);
+}
+
+/* ---------- 13. Pages intérieures : titre et fil d'Ariane --------------- */
+.page-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(600px circle at 90% 0%, rgba(47, 176, 138, 0.12), transparent 60%),
+    radial-gradient(500px circle at 0% 100%, rgba(188, 143, 70, 0.10), transparent 60%),
+    var(--cream);
+}
+.page-hero h1 {
+  animation: v-rise 0.8s var(--v-ease) both;
+}
+.page-hero p {
+  animation: v-rise 0.9s var(--v-ease) 0.1s both;
+}
+.breadcrumbs span {
+  transition: color 0.25s;
+}
+.breadcrumbs span:hover {
+  color: var(--v-green-1);
+}
+
+/* ---------- 14. Contact, accès, prose ------------------------------------ */
+.contact-line {
+  transition: transform 0.35s var(--v-ease), box-shadow 0.35s, border-color 0.35s;
+}
+.contact-line:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 40px -22px rgba(20, 62, 53, 0.4);
+  border-color: #b5cdbb;
+}
+.contact-line .ico {
+  transition: transform 0.5s var(--v-ease-spring);
+}
+.contact-line:hover .ico {
+  transform: scale(1.15) rotate(-6deg);
+}
+.map-card {
+  transition: transform 0.4s var(--v-ease);
+}
+.map-card:hover {
+  transform: translateY(-3px);
+}
+.faq details {
+  transition: box-shadow 0.3s, border-color 0.3s;
+}
+.faq details[open] {
+  box-shadow: 0 14px 30px -20px rgba(20, 62, 53, 0.4);
+}
+.faq summary {
+  transition: color 0.25s;
+}
+.faq summary:hover {
+  color: var(--v-green-1);
+}
+.prose h2 {
+  position: relative;
+  padding-left: 16px;
+}
+.prose h2:before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.2em;
+  bottom: 0.2em;
+  width: 4px;
+  border-radius: 4px;
+  background: linear-gradient(var(--v-green-3), var(--v-gold));
+}
+
+/* ---------- 15. Formulaire : focus et états ----------------------------- */
+.field input,
+.field select,
+.field textarea,
+textarea {
+  transition: border-color 0.25s, box-shadow 0.25s, background 0.25s;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+textarea:focus {
+  box-shadow: 0 0 0 4px rgba(47, 176, 138, 0.18);
+  border-color: var(--v-green-2);
+}
+.success-box {
+  animation: v-scale-in 0.6s var(--v-ease-spring) both;
+}
+.success-box .success-icon {
+  animation: v-pulse 2.2s ease-in-out infinite;
+}
+.reference {
+  transition: transform 0.3s var(--v-ease);
+}
+.reference:hover {
+  transform: scale(1.02);
+}
+
+/* ---------- 16. Espace de gestion : légère vie, sans gêner les tableaux -- */
+.stat-card {
+  transition: transform 0.35s var(--v-ease), box-shadow 0.35s, border-color 0.35s;
+}
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 34px -22px rgba(20, 62, 53, 0.45);
+  border-color: #b5cdbb;
+}
+.stat-value {
+  transition: color 0.3s;
+}
+.quick-link {
+  transition: transform 0.3s var(--v-ease), box-shadow 0.3s, border-color 0.3s;
+}
+.quick-link:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px -20px rgba(20, 62, 53, 0.45);
+}
+.quick-link .ico {
+  transition: transform 0.4s var(--v-ease-spring);
+}
+.quick-link:hover .ico {
+  transform: scale(1.12) rotate(-5deg);
+}
+.panel {
+  transition: box-shadow 0.35s var(--v-ease);
+}
+.panel:hover {
+  box-shadow: 0 14px 34px -26px rgba(20, 62, 53, 0.4);
+}
+.chart-bar {
+  transform-origin: bottom center;
+  animation: v-grow 0.9s var(--v-ease) both;
+}
+@keyframes v-grow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+table tbody tr {
+  transition: background 0.2s;
+}
+table tbody tr:hover {
+  background: #f5f9f3;
+}
+.calendar-day {
+  transition: background 0.2s, transform 0.2s var(--v-ease);
+}
+.calendar-day:hover {
+  transform: translateY(-2px);
+}
+.calendar-event {
+  transition: transform 0.2s var(--v-ease), box-shadow 0.2s;
+}
+.calendar-event:hover {
+  transform: translateX(3px);
+  box-shadow: 0 6px 14px -8px rgba(20, 62, 53, 0.5);
+}
+
+/* ---------- 17. Révélation au défilement (activée par vivant.js) -------- */
+.v-reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition:
+    opacity 0.8s var(--v-ease) var(--v-delay, 0s),
+    transform 0.8s var(--v-ease) var(--v-delay, 0s);
+  will-change: opacity, transform;
+}
+.v-reveal.v-in {
+  opacity: 1;
+  transform: none;
+}
+/* Les cartes gardent leur transition de survol une fois révélées */
+.card.v-reveal.v-in {
+  transition:
+    opacity 0.8s var(--v-ease) var(--v-delay, 0s),
+    transform 0.45s var(--v-ease),
+    box-shadow 0.45s var(--v-ease),
+    border-color 0.3s;
+}
+
+/* ---------- 18. Accessibilité & mouvement réduit ------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *:before,
+  *:after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .v-reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- 19. Adaptations mobiles ------------------------------------- */
+@media (max-width: 860px) {
+  .hero-grid::before,
+  .hero-grid::after {
+    width: 280px;
+    height: 280px;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+  }
+  .site-header.v-scrolled .header-inner {
+    height: 66px;
+  }
+}
+@media (max-width: 700px) {
+  .hero-visual::after {
+    display: none;
+  }
+  .care-float {
+    left: 10px;
+  }
+  .btn:hover {
+    transform: none;
+  }
+}
