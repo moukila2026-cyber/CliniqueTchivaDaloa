@@ -12,7 +12,6 @@ def main():
     if a.command=='generate-secrets':
         print('À copier dans les variables privées Vercel et dans votre coffre. NE PAS committer ni partager.')
         print('ENCRYPTION_KEY='+base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())
-        print('SETUP_KEY='+secrets.token_urlsafe(32))
         print('BACKUP_KEY='+base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())
         print('Ne régénérez pas ENCRYPTION_KEY après les premières données.')
         return
