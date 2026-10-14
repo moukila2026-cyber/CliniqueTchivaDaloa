@@ -1,0 +1,10 @@
+# Remplacez le domaine et l'adresse de contact avant utilisation.
+votre-domaine-a-configurer.ci {
+    request_body {
+        max_size 128KB
+    }
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8000
+    header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src https://www.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    header X-Frame-Options DENY
+}
