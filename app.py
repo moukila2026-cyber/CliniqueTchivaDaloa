@@ -1,5 +1,5 @@
 """Clinique Tchiva — application PostgreSQL/Neon et SQLite local, API et interface française."""
-import os, re, json, secrets, hashlib, hmac, time, csv, io
+import os, re, json, secrets, hashlib, hmac, time, csv, io, threading
 from pathlib import Path
 from datetime import datetime, timedelta, date, timezone
 from contextlib import contextmanager
@@ -26,11 +26,9 @@ def private_file(name, value):
         with os.fdopen(fd,'w') as f:f.write(value)
     return path.read_text().strip()
 KEY=os.environ.get('ENCRYPTION_KEY','').strip()
-SETUP_KEY=os.environ.get('SETUP_KEY','').strip()
-if STORE.postgres and (not KEY or len(SETUP_KEY)<24):
-    raise RuntimeError('Définissez ENCRYPTION_KEY (clé Fernet) et SETUP_KEY (au moins 24 caractères) dans les variables privées du déploiement.')
+if STORE.postgres and not KEY:
+    raise RuntimeError('Définissez ENCRYPTION_KEY (clé Fernet) dans les variables privées du déploiement.')
 KEY=KEY or private_file('encryption.key',Fernet.generate_key().decode())
-SETUP_KEY=SETUP_KEY or private_file('setup.key',secrets.token_urlsafe(24))
 try:CIPHER=Fernet(KEY.encode())
 except Exception:raise RuntimeError('ENCRYPTION_KEY doit être une clé Fernet valide, inchangée entre les déploiements.') from None
 SECURE=os.environ.get('COOKIE_SECURE','1' if STORE.serverless else '0')=='1'
@@ -39,6 +37,7 @@ app=FastAPI(title='Clinique Tchiva',docs_url=None,redoc_url=None,openapi_url=Non
 @contextmanager
 def db():
     STORE.initialize(DEFAULT)
+    ensure_initial_admin()
     with STORE.connection() as con:yield con
 def now(): return datetime.now(timezone.utc).isoformat()
 def enc(x): return CIPHER.encrypt(str(x).encode()).decode()
@@ -121,9 +120,6 @@ def valid_slot(s):
 class Login(BaseModel):
     email:str=Field(min_length=3,max_length=150)
     password:str=Field(min_length=1,max_length=72)
-class Setup(Login):
-    key:str=Field(max_length=150)
-    name:str=Field(min_length=2,max_length=100)
 
 def password_hash(password):
     if len(password)<12 or len(password.encode())>72: raise HTTPException(422,'Le mot de passe doit contenir au moins 12 caractères et au plus 72 octets.')
@@ -133,24 +129,55 @@ def email_valid(email):
     if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email): raise HTTPException(422,'Adresse e-mail invalide.')
     return email
 
+# Installation privée : le navigateur ne peut pas choisir le premier admin.
+# Les valeurs sont définies par le propriétaire dans les variables Vercel.
+_BOOTSTRAP_CHECKED=False
+_BOOTSTRAP_LOCK=threading.RLock()
+def ensure_initial_admin():
+    global _BOOTSTRAP_CHECKED
+    if _BOOTSTRAP_CHECKED:return
+    with _BOOTSTRAP_LOCK:
+        if _BOOTSTRAP_CHECKED:return
+        with STORE.connection() as c:
+            c.execute('BEGIN IMMEDIATE')
+            c.execute('CREATE TABLE IF NOT EXISTS bootstrap_state(id INTEGER PRIMARY KEY CHECK(id=1), initialized_at TEXT NOT NULL)')
+            initialized=c.execute('SELECT 1 FROM bootstrap_state WHERE id=1').fetchone()
+            if not initialized:
+                existing=c.execute('SELECT 1 FROM users LIMIT 1').fetchone()
+                if existing:
+                    # Une mise à jour ne modifie jamais un compte/mot de passe existant.
+                    c.execute('INSERT INTO bootstrap_state(id,initialized_at) VALUES(1,?)',(now(),))
+                else:
+                    family=os.environ.get('ADMIN_NOM','').strip()
+                    given=os.environ.get('ADMIN_PRENOM','').strip()
+                    email=os.environ.get('ADMIN_EMAIL','').strip()
+                    password=os.environ.get('ADMIN_PASSWORD','')
+                    if all((family,given,email,password)):
+                        try:
+                            fullname=(given+' '+family).strip()
+                            if len(fullname)>100 or len(email)>150:raise HTTPException(422,'Configuration initiale invalide.')
+                            email=email_valid(email)
+                            hashed=password_hash(password)
+                        except HTTPException:
+                            logging.getLogger('tchiva').warning('Compte initial non créé : vérifier ADMIN_NOM, ADMIN_PRENOM, ADMIN_EMAIL et ADMIN_PASSWORD, sans afficher leurs valeurs.')
+                        else:
+                            uid=c.insert_id('INSERT INTO users(name,email,password,role) VALUES(?,?,?,?)',(fullname,email,hashed,'admin'))
+                            c.execute('INSERT INTO audit(user_id,action,entity,created_at) VALUES(?,?,?,?)',(uid,'Création initiale privée du compte administrateur',str(uid),now()))
+                            c.execute('INSERT INTO bootstrap_state(id,initialized_at) VALUES(1,?)',(now(),))
+                    # Sans configuration complète, rester fermé, jamais d'inscription publique.
+        _BOOTSTRAP_CHECKED=True
+
 @app.get('/api/public')
 def public():
     s=settings()
     s['team']=[p for p in s['team'] if p.get('published')]
     s['specialties']=[p for p in s['specialties'] if p.get('published')]
     with db() as c: needs_setup=not bool(c.execute('SELECT 1 FROM users LIMIT 1').fetchone())
-    return {'settings':s,'needs_setup':needs_setup,'setup_mode':'environment' if STORE.postgres else 'file'}
+    return {'settings':s,'needs_setup':needs_setup,'setup_mode':'private_admin'}
 
-@app.post('/api/setup',status_code=201)
-def setup(payload:Setup,request:Request):
-    limit(request,'setup',5,900)
-    if not secrets.compare_digest(payload.key,SETUP_KEY): raise HTTPException(403,'Code d’installation incorrect.')
-    h=password_hash(payload.password); email=email_valid(payload.email)
-    with db() as c:
-        c.execute('BEGIN IMMEDIATE')
-        if c.execute('SELECT 1 FROM users LIMIT 1').fetchone(): raise HTTPException(409,'Installation déjà terminée.')
-        c.execute('INSERT INTO users(name,email,password,role) VALUES(?,?,?,?)',(text(payload.name,100),email,h,'admin'))
-    return {'ok':True}
+@app.post('/api/setup')
+def setup_disabled():
+    raise HTTPException(410,'L’inscription administrateur publique est désactivée. Le premier compte est créé depuis la configuration privée du propriétaire.')
 
 @app.post('/api/login')
 def login(payload:Login,request:Request):
