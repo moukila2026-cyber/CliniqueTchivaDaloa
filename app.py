@@ -1,8 +1,7 @@
-"""Clinique Tchiva — application mono-instance, SQLite, API et interface française."""
-import os, re, json, sqlite3, secrets, hashlib, time, csv, io
+"""Clinique Tchiva — application PostgreSQL/Neon et SQLite local, API et interface française."""
+import os, re, json, secrets, hashlib, hmac, time, csv, io
 from pathlib import Path
 from datetime import datetime, timedelta, date, timezone
-from collections import defaultdict, deque
 from contextlib import contextmanager
 import bcrypt
 from cryptography.fernet import Fernet
@@ -10,29 +9,37 @@ from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from database import Database, INTEGRITY_ERRORS, DATABASE_ERRORS
+import logging
 
 ROOT=Path(__file__).parent
-DATA=Path(os.environ.get('DATA_DIR',ROOT/'data')); DATA.mkdir(parents=True,exist_ok=True,mode=0o700)
-DB=DATA/'tchiva.sqlite3'
+STORE=Database()
+DATA=STORE.data
+DB=STORE.path
 def private_file(name, value):
+    if STORE.postgres:
+        raise RuntimeError('Les secrets sont obligatoires en variables privées avec PostgreSQL ; aucun fichier de secours ne sera généré.')
+    DATA.mkdir(parents=True,exist_ok=True,mode=0o700)
     path=DATA/name
     if not path.exists():
         fd=os.open(path,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
-        with os.fdopen(fd,'w') as f: f.write(value)
+        with os.fdopen(fd,'w') as f:f.write(value)
     return path.read_text().strip()
-KEY=os.environ.get('ENCRYPTION_KEY') or private_file('encryption.key',Fernet.generate_key().decode())
-CIPHER=Fernet(KEY.encode())
-SETUP_KEY=os.environ.get('SETUP_KEY') or private_file('setup.key',secrets.token_urlsafe(24))
-SECURE=os.environ.get('COOKIE_SECURE','0')=='1'
+KEY=os.environ.get('ENCRYPTION_KEY','').strip()
+SETUP_KEY=os.environ.get('SETUP_KEY','').strip()
+if STORE.postgres and (not KEY or len(SETUP_KEY)<24):
+    raise RuntimeError('Définissez ENCRYPTION_KEY (clé Fernet) et SETUP_KEY (au moins 24 caractères) dans les variables privées du déploiement.')
+KEY=KEY or private_file('encryption.key',Fernet.generate_key().decode())
+SETUP_KEY=SETUP_KEY or private_file('setup.key',secrets.token_urlsafe(24))
+try:CIPHER=Fernet(KEY.encode())
+except Exception:raise RuntimeError('ENCRYPTION_KEY doit être une clé Fernet valide, inchangée entre les déploiements.') from None
+SECURE=os.environ.get('COOKIE_SECURE','1' if STORE.serverless else '0')=='1'
 BASE_URL=os.environ.get('PUBLIC_URL','').rstrip('/')
 app=FastAPI(title='Clinique Tchiva',docs_url=None,redoc_url=None,openapi_url=None)
 @contextmanager
 def db():
-    con=sqlite3.connect(DB,timeout=15); con.row_factory=sqlite3.Row
-    con.execute('PRAGMA foreign_keys=ON'); con.execute('PRAGMA busy_timeout=15000')
-    try: yield con; con.commit()
-    except: con.rollback(); raise
-    finally: con.close()
+    STORE.initialize(DEFAULT)
+    with STORE.connection() as con:yield con
 def now(): return datetime.now(timezone.utc).isoformat()
 def enc(x): return CIPHER.encrypt(str(x).encode()).decode()
 def dec(x): return CIPHER.decrypt(x.encode()).decode() if x else ''
@@ -41,37 +48,25 @@ DEFAULT={
  'name':'Clinique Tchiva','address':'Tazibouo, en face du Collège La Paix','city':'Daloa','phone':'','whatsapp':'','email':'','hours':'','about':'Au cœur de Daloa, la Clinique Tchiva vous accueille à Tazibouo, en face du Collège La Paix. Contactez notre accueil pour vous renseigner et organiser votre venue.',
  'specialties':[], 'team':[], 'schedules':[], 'map_url':'', 'privacy_contact':'', 'retention_days':180
 }
-with db() as c:
-    c.executescript('''
-    PRAGMA journal_mode=WAL;
-    CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY CHECK(id=1), data TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password BLOB NOT NULL, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1);
-    CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), csrf TEXT NOT NULL, expires REAL NOT NULL);
-    CREATE TABLE IF NOT EXISTS appointments(id INTEGER PRIMARY KEY, reference TEXT UNIQUE NOT NULL, patient TEXT NOT NULL, phone TEXT NOT NULL, service TEXT NOT NULL, practitioner TEXT NOT NULL DEFAULT '', day TEXT NOT NULL, slot TEXT NOT NULL, consent INTEGER NOT NULL, privacy_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL);
-    CREATE UNIQUE INDEX IF NOT EXISTS confirmed_slot ON appointments(day,slot,practitioner) WHERE status='confirmed' AND slot!='';
-    CREATE TABLE IF NOT EXISTS consultations(id INTEGER PRIMARY KEY, patient TEXT NOT NULL, service TEXT NOT NULL, practitioner TEXT NOT NULL, day TEXT NOT NULL, amount INTEGER NOT NULL, paid INTEGER NOT NULL, appointment_id INTEGER UNIQUE REFERENCES appointments(id), created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS transactions(id INTEGER PRIMARY KEY, kind TEXT NOT NULL, category TEXT NOT NULL, label TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount>0), day TEXT NOT NULL, consultation_id INTEGER UNIQUE REFERENCES consultations(id), created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS inventory(id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, unit TEXT NOT NULL, quantity INTEGER NOT NULL CHECK(quantity>=0), threshold INTEGER NOT NULL CHECK(threshold>=0));
-    CREATE TABLE IF NOT EXISTS movements(id INTEGER PRIMARY KEY, item_id INTEGER REFERENCES inventory(id), delta INTEGER NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY, user_id INTEGER, action TEXT NOT NULL, entity TEXT NOT NULL, created_at TEXT NOT NULL);
-    ''')
-    c.execute('INSERT OR IGNORE INTO settings VALUES(1,?)',(json.dumps(DEFAULT,ensure_ascii=False),))
-    c.execute('DELETE FROM sessions WHERE expires < ?',(time.time(),))
-    os.chmod(DB,0o600)
 
 def settings():
     with db() as c: return json.loads(c.execute('SELECT data FROM settings WHERE id=1').fetchone()[0])
 def log(c,user,action,entity): c.execute('INSERT INTO audit(user_id,action,entity,created_at) VALUES(?,?,?,?)',(user['id'],action,str(entity),now()))
-LIMITS=defaultdict(deque)
 def limit(request,key,max_count,seconds):
-    # The deployment proxy must pass a trustworthy client IP via uvicorn's configured proxy allowlist.
-    ip=request.client.host if request.client else 'unknown'; k=(key,ip); q=LIMITS[k]; t=time.time()
-    while q and q[0]<t-seconds:q.popleft()
-    if len(q)>=max_count: raise HTTPException(429,'Trop de tentatives. Réessayez plus tard.')
-    q.append(t)
-    if len(LIMITS)>10000:
-        for x in list(LIMITS):
-            if not LIMITS[x] or LIMITS[x][-1]<t-86400: del LIMITS[x]
+    # Sur Vercel, cet en-tête est fourni/écrasé par la plateforme.
+    ip=(request.headers.get('x-vercel-forwarded-for') or request.headers.get('x-forwarded-for') or 'unknown').split(',')[0].strip() if STORE.serverless else (request.client.host if request.client else 'unknown')
+    pseudonym=hmac.new(KEY.encode(),('tchiva-rate-v1:'+key+':'+ip).encode(),hashlib.sha256).hexdigest()
+    t=time.time();bucket=int(t//seconds)
+    with db() as c:
+        c.execute('DELETE FROM rate_limits WHERE expires<?',(t,))
+        count=c.execute('INSERT INTO rate_limits(key,bucket,count,expires) VALUES(?,?,1,?) ON CONFLICT(key,bucket) DO UPDATE SET count=rate_limits.count+1 RETURNING count',(pseudonym,bucket,(bucket+1)*seconds)).fetchone()[0]
+    if count>max_count:raise HTTPException(429,'Trop de tentatives. Réessayez plus tard.')
+
+@app.exception_handler(Exception)
+async def unexpected_error(request,exc):
+    # Ne jamais journaliser une URL de connexion, mot de passe ou corps de requête.
+    logging.getLogger('tchiva').error('Erreur interne type=%s',type(exc).__name__)
+    return JSONResponse({'detail':'Service temporairement indisponible. Réessayez ou contactez l’accueil.'},status_code=503,headers={'Cache-Control':'no-store'})
 
 @app.middleware('http')
 async def security(request,call_next):
@@ -79,6 +74,7 @@ async def security(request,call_next):
         origin=request.headers.get('origin')
         accepted={str(request.base_url).rstrip('/')}
         if BASE_URL: accepted.add(BASE_URL)
+        if STORE.serverless:accepted.add('https://'+request.headers.get('host',''))
         if origin and origin.rstrip('/') not in accepted:
             return JSONResponse({'detail':'Origine non autorisée.'},status_code=403)
     response=await call_next(request)
@@ -86,7 +82,12 @@ async def security(request,call_next):
     response.headers['Referrer-Policy']='strict-origin-when-cross-origin'
     response.headers['Permissions-Policy']='camera=(), microphone=(), geolocation=()'
     response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src https://www.google.com; frame-ancestors 'self' https://*.arena.ai https://arena.ai https://*.e2b.app; base-uri 'self'; form-action 'self'"
-    if request.url.path.startswith('/api'): response.headers['Cache-Control']='no-store'
+    if STORE.serverless:
+        response.headers['Content-Security-Policy']=response.headers['Content-Security-Policy'].replace("frame-ancestors 'self' https://*.arena.ai https://arena.ai https://*.e2b.app","frame-ancestors 'none'")
+        response.headers['X-Frame-Options']='DENY'
+    if request.url.path.startswith('/api') or request.url.path.startswith('/gestion'):
+        response.headers['Cache-Control']='private, no-store'
+        response.headers['Vercel-CDN-Cache-Control']='no-store'
     if SECURE: response.headers['Strict-Transport-Security']='max-age=31536000; includeSubDomains'
     return response
 
@@ -106,7 +107,7 @@ def text(x,n=200): return str(x).strip()[:n]
 def valid_day(s,past=True):
     try: d=date.fromisoformat(s)
     except: raise HTTPException(422,'Date invalide.')
-    if not past and (d<date.today() or d>date.today()+timedelta(days=180)): raise HTTPException(422,'Choisissez une date dans les 180 prochains jours.')
+    if not past and (d<datetime.now(timezone.utc).date() or d>datetime.now(timezone.utc).date()+timedelta(days=180)): raise HTTPException(422,'Choisissez une date dans les 180 prochains jours.')
     return s
 
 def valid_phone(s):
@@ -138,7 +139,7 @@ def public():
     s['team']=[p for p in s['team'] if p.get('published')]
     s['specialties']=[p for p in s['specialties'] if p.get('published')]
     with db() as c: needs_setup=not bool(c.execute('SELECT 1 FROM users LIMIT 1').fetchone())
-    return {'settings':s,'needs_setup':needs_setup}
+    return {'settings':s,'needs_setup':needs_setup,'setup_mode':'environment' if STORE.postgres else 'file'}
 
 @app.post('/api/setup',status_code=201)
 def setup(payload:Setup,request:Request):
@@ -190,7 +191,7 @@ def create_appointment(p:Appointment,request:Request):
     if p.website: raise HTTPException(422,'Demande invalide.')
     if not p.privacy: raise HTTPException(422,'Veuillez accepter le traitement de votre demande.')
     valid_day(p.day,False); valid_slot(p.slot); phone=valid_phone(p.phone)
-    if p.slot and datetime.fromisoformat(p.day+'T'+p.slot)<datetime.now():raise HTTPException(422,'Le créneau souhaité est déjà passé.')
+    if p.slot and datetime.fromisoformat(p.day+'T'+p.slot)<datetime.now(timezone.utc).replace(tzinfo=None):raise HTTPException(422,'Le créneau souhaité est déjà passé.')
     s=settings()
     names=[x['name'] for x in s['specialties'] if x.get('published')]
     if p.service not in names+['Demande de consultation']:raise HTTPException(422,'Service non disponible.')
@@ -208,7 +209,7 @@ def availability(day:str,practitioner:str=''):
         if schedule['weekday']==weekday and (not practitioner or schedule.get('practitioner','')==practitioner):
             start=datetime.fromisoformat(day+'T'+schedule['start']); end=datetime.fromisoformat(day+'T'+schedule['end'])
             while start<end:
-                if start>datetime.now():slots.add(start.strftime('%H:%M'))
+                if start>datetime.now(timezone.utc).replace(tzinfo=None):slots.add(start.strftime('%H:%M'))
                 start+=timedelta(minutes=schedule['minutes'])
     with db() as c:
         if practitioner:
@@ -244,7 +245,7 @@ def update_appointment(id:int,p:AppointmentUpdate,user=Depends(auth)):
             c.execute('BEGIN IMMEDIATE')
             if not c.execute('SELECT 1 FROM appointments WHERE id=?',(id,)).fetchone():raise HTTPException(404,'Demande introuvable.')
             c.execute('UPDATE appointments SET status=?,day=?,slot=?,practitioner=? WHERE id=?',(p.status,p.day,p.slot,p.practitioner,id)); log(c,user,'Modification du rendez-vous',id)
-    except sqlite3.IntegrityError:raise HTTPException(409,'Ce créneau est déjà confirmé pour ce praticien.')
+    except INTEGRITY_ERRORS:raise HTTPException(409,'Ce créneau est déjà confirmé pour ce praticien.')
     return {'ok':True}
 
 @app.post('/api/admin/appointments/{id}/reminder')
@@ -254,7 +255,7 @@ def reminder(id:int,user=Depends(auth)):
         r=c.execute('SELECT * FROM appointments WHERE id=?',(id,)).fetchone()
         if not r:raise HTTPException(404,'Demande introuvable.')
         if not r['consent'] or r['status']!='confirmed':raise HTTPException(422,'Un consentement aux rappels et un rendez-vous confirmé sont nécessaires.')
-        if r['day']<date.today().isoformat():raise HTTPException(422,'Le rendez-vous est passé.')
+        if r['day']<datetime.now(timezone.utc).date().isoformat():raise HTTPException(422,'Le rendez-vous est passé.')
         log(c,user,'Préparation d’un rappel manuel (envoi non vérifié)',id)
     phone=dec(r['phone']).lstrip('+')
     if len(phone)==10:phone='225'+phone
@@ -302,16 +303,16 @@ def consultations(user=Depends(auth)):
 def create_consultation(p:Consultation,user=Depends(auth)):
     allowed(user,'medical');valid_day(p.day)
     if p.paid>p.amount:raise HTTPException(422,'L’encaissement ne peut pas dépasser le montant dû.')
-    if p.day>date.today().isoformat():raise HTTPException(422,'Une consultation ne peut être enregistrée à une date future.')
+    if p.day>datetime.now(timezone.utc).date().isoformat():raise HTTPException(422,'Une consultation ne peut être enregistrée à une date future.')
     try:
         with db() as c:
             c.execute('BEGIN IMMEDIATE')
             if p.appointment_id and not c.execute('SELECT 1 FROM appointments WHERE id=?',(p.appointment_id,)).fetchone():raise HTTPException(404,'Rendez-vous introuvable.')
-            id=c.execute('INSERT INTO consultations(patient,service,practitioner,day,amount,paid,appointment_id,created_at) VALUES(?,?,?,?,?,?,?,?)',(enc(text(p.patient,120)),text(p.service,120),text(p.practitioner,100),p.day,p.amount,p.paid,p.appointment_id,now())).lastrowid
+            id=c.insert_id('INSERT INTO consultations(patient,service,practitioner,day,amount,paid,appointment_id,created_at) VALUES(?,?,?,?,?,?,?,?)',(enc(text(p.patient,120)),text(p.service,120),text(p.practitioner,100),p.day,p.amount,p.paid,p.appointment_id,now()))
             if p.paid:c.execute('INSERT INTO transactions(kind,category,label,amount,day,consultation_id,created_at) VALUES(?,?,?,?,?,?,?)',('income','Consultations',f'Encaissement consultation #{id}',p.paid,p.day,id,now()))
             if p.appointment_id:c.execute("UPDATE appointments SET status='completed' WHERE id=?",(p.appointment_id,))
             log(c,user,'Création consultation et encaissement',id)
-    except sqlite3.IntegrityError:raise HTTPException(409,'Ce rendez-vous possède déjà une consultation.')
+    except INTEGRITY_ERRORS:raise HTTPException(409,'Ce rendez-vous possède déjà une consultation.')
     return {'id':id}
 
 class Payment(BaseModel):
@@ -324,7 +325,7 @@ def payment(id:int,p:Payment,user=Depends(auth)):
         if not r:raise HTTPException(404,'Consultation introuvable.')
         if p.amount>r['amount']-r['paid']:raise HTTPException(422,'Le paiement dépasse le solde restant.')
         c.execute('UPDATE consultations SET paid=paid+? WHERE id=?',(p.amount,id))
-        c.execute('INSERT INTO transactions(kind,category,label,amount,day,created_at) VALUES(?,?,?,?,?,?)',('income','Consultations',f'Complément consultation #{id}',p.amount,date.today().isoformat(),now()));log(c,user,'Paiement complémentaire',id)
+        c.execute('INSERT INTO transactions(kind,category,label,amount,day,created_at) VALUES(?,?,?,?,?,?)',('income','Consultations',f'Complément consultation #{id}',p.amount,datetime.now(timezone.utc).date().isoformat(),now()));log(c,user,'Paiement complémentaire',id)
     return {'ok':True}
 
 class Transaction(BaseModel):
@@ -342,9 +343,9 @@ def transactions(user=Depends(auth)):
 def create_transaction(p:Transaction,user=Depends(auth)):
     allowed(user,'accounting');valid_day(p.day)
     if p.kind not in ['income','expense']:raise HTTPException(422,'Type invalide.')
-    if p.day>date.today().isoformat():raise HTTPException(422,'La date ne peut pas être future.')
+    if p.day>datetime.now(timezone.utc).date().isoformat():raise HTTPException(422,'La date ne peut pas être future.')
     with db() as c:
-        id=c.execute('INSERT INTO transactions(kind,category,label,amount,day,created_at) VALUES(?,?,?,?,?,?)',(p.kind,p.category,p.label,p.amount,p.day,now())).lastrowid;log(c,user,'Écriture financière',id)
+        id=c.insert_id('INSERT INTO transactions(kind,category,label,amount,day,created_at) VALUES(?,?,?,?,?,?)',(p.kind,p.category,p.label,p.amount,p.day,now()));log(c,user,'Écriture financière',id)
     return {'id':id}
 
 class Item(BaseModel):
@@ -364,9 +365,9 @@ def create_item(p:Item,user=Depends(auth)):
     allowed(user,'reception','medical','accounting')
     try:
         with db() as c:
-            id=c.execute('INSERT INTO inventory(name,unit,quantity,threshold) VALUES(?,?,?,?)',(p.name,p.unit,p.quantity,p.threshold)).lastrowid
+            id=c.insert_id('INSERT INTO inventory(name,unit,quantity,threshold) VALUES(?,?,?,?)',(p.name,p.unit,p.quantity,p.threshold))
             c.execute('INSERT INTO movements(item_id,delta,reason,created_at) VALUES(?,?,?,?)',(id,p.quantity,'Stock initial',now()));log(c,user,'Création consommable',id)
-    except sqlite3.IntegrityError:raise HTTPException(409,'Ce consommable existe déjà.')
+    except INTEGRITY_ERRORS:raise HTTPException(409,'Ce consommable existe déjà.')
     return {'id':id}
 @app.post('/api/admin/inventory/{id}/movement')
 def movement(id:int,p:Movement,user=Depends(auth)):
@@ -388,9 +389,9 @@ def summary(user=Depends(auth)):
     with db() as c:
         result={'role':user['role']}
         if user['role'] in ['admin','reception','medical']:
-            result.update({'pending':c.execute("SELECT COUNT(*) FROM appointments WHERE status='pending'").fetchone()[0], 'today':c.execute("SELECT COUNT(*) FROM appointments WHERE day=? AND status!='cancelled'",(date.today().isoformat(),)).fetchone()[0]})
+            result.update({'pending':c.execute("SELECT COUNT(*) FROM appointments WHERE status='pending'").fetchone()[0], 'today':c.execute("SELECT COUNT(*) FROM appointments WHERE day=? AND status!='cancelled'",(datetime.now(timezone.utc).date().isoformat(),)).fetchone()[0]})
         if user['role'] in ['admin','accounting']:
-            month=date.today().strftime('%Y-%m')
+            month=datetime.now(timezone.utc).date().strftime('%Y-%m')
             result['income']=c.execute("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE kind='income' AND substr(day,1,7)=?",(month,)).fetchone()[0]
             result['expense']=c.execute("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE kind='expense' AND substr(day,1,7)=?",(month,)).fetchone()[0]
         result['low_stock']=c.execute('SELECT COUNT(*) FROM inventory WHERE quantity<=threshold').fetchone()[0]
@@ -460,8 +461,8 @@ def create_user(p:UserCreate,user=Depends(auth)):
     h=password_hash(p.password);email=email_valid(p.email)
     try:
         with db() as c:
-            id=c.execute('INSERT INTO users(name,email,password,role) VALUES(?,?,?,?)',(p.name,email,h,p.role)).lastrowid;log(c,user,'Création compte',id)
-    except sqlite3.IntegrityError:raise HTTPException(409,'Cet e-mail existe déjà.')
+            id=c.insert_id('INSERT INTO users(name,email,password,role) VALUES(?,?,?,?)',(p.name,email,h,p.role));log(c,user,'Création compte',id)
+    except INTEGRITY_ERRORS:raise HTTPException(409,'Cet e-mail existe déjà.')
     return {'id':id}
 @app.patch('/api/admin/users/{id}')
 def disable_user(id:int,user=Depends(auth)):
@@ -492,7 +493,7 @@ def report(start:str,end:str,user=Depends(auth)):
         return "'"+s if s.lstrip().startswith(('=','+','-','@')) else s
     out=io.StringIO();writer=csv.writer(out,delimiter=';');writer.writerow(['Date','Type','Catégorie','Libellé','Montant (FCFA)'])
     with db() as c:
-        for r in c.execute('SELECT day,kind,category,label,amount FROM transactions WHERE day BETWEEN ? AND ? ORDER BY day,id',(start,end)):writer.writerow([safe(x) for x in r])
+        for r in c.execute('SELECT day,kind,category,label,amount FROM transactions WHERE day BETWEEN ? AND ? ORDER BY day,id',(start,end)):writer.writerow([safe(r[k]) for k in r.keys()])
         log(c,user,'Export financier',f'{start} / {end}')
     return Response('\ufeff'+out.getvalue(),media_type='text/csv; charset=utf-8',headers={'Content-Disposition':f'attachment; filename="tchiva-finances-{start}-{end}.csv"'})
 
@@ -515,7 +516,11 @@ def frontend(path:str=''):
     html=html.replace('__TITLE__',escape(titles.get(path,'Clinique Tchiva · Espace sécurisé')))
     schema={'@context':'https://schema.org','@type':'MedicalClinic','name':s['name'],'address':{'@type':'PostalAddress','streetAddress':s['address'],'addressLocality':s['city'],'addressCountry':'CI'}}
     if s['phone']:schema['telephone']=s['phone']
-    if BASE_URL:schema['url']=BASE_URL
+    if BASE_URL:
+        schema['url']=BASE_URL
+        schema['logo']=BASE_URL+'/static/logo.png'
+        schema['image']=BASE_URL+'/static/logo.png'
+    html=html.replace('__LOGO_META__',f'<meta property="og:image" content="{escape(BASE_URL+"/static/logo.png",quote=True)}"><meta property="og:image:alt" content="Logo de la Clinique Tchiva">' if BASE_URL else '')
     html=html.replace('__SCHEMA__',json.dumps(schema,ensure_ascii=False).replace('<','\\u003c'))
     html=html.replace('__CANONICAL__',f'<link rel="canonical" href="{escape(BASE_URL+"/"+path,quote=True)}">' if BASE_URL else '')
     html=html.replace('__ROBOTS__','noindex, nofollow' if path.startswith('gestion') else 'index, follow')

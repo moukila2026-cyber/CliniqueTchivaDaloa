@@ -1,179 +1,166 @@
-# Clinique Tchiva · Daloa
+# Clinique Tchiva · Daloa — Neon + Vercel
 
-Site public et application de gestion en français, préparés pour un déploiement mono-instance. **Ce livrable n’est pas une certification de conformité, ni un dossier patient informatisé complet.** N’introduisez aucune donnée réelle avant la validation de l’hébergement, des accès, des sauvegardes et des obligations applicables aux données de santé en Côte d’Ivoire.
+Site professionnel et gestion administrative en français. Adresse : **Tazibouo, en face du Collège La Paix, Daloa**.
 
-## 1. Ce qui est livré
+## Commencer ici
+
+**GUIDE-NEON-VERCEL.md** contient la procédure détaillée pour corriger le dépôt GitHub, ajouter le logo, créer la base Neon et configurer Vercel.
+
+Cette version remplace l’ancien montage Vercel en proxy devant SQLite. **Vercel déploie directement l’application FastAPI depuis la racine du projet ; Neon héberge PostgreSQL. Ne choisissez plus `deploy/vercel` comme Root Directory.**
+
+Le dépôt inspecté `moukila2026-cyber/CliniqueTchivaDaloa` manquait de `static/`. Importez le projet complet en conservant les dossiers, pas seulement les fichiers à la racine.
+
+## Fonctions incluses
 
 ### Site public
-- Accueil professionnel, pages Clinique, Services, Équipe, Contact et Rendez-vous.
-- Affichage responsive, testé sur 320 px, 390 px et ordinateur.
-- Adresse : **Tazibouo, en face du Collège La Paix, Daloa**.
-- Informations essentielles modifiables depuis l’espace de gestion.
-- Bouton WhatsApp opérationnel une fois le numéro officiel renseigné. Sans numéro, aucun faux lien : une explication et une alternative sont affichées.
-- Recherche d’itinéraire Google Maps ; carte Google intégrable après validation de son point exact. Le schéma par défaut est clairement non géographique.
-- Métadonnées, balisage local JSON-LD `MedicalClinic`, `robots.txt`, sitemap et canoniques après configuration du domaine.
-- Pages de confidentialité et mentions légales à valider/compléter.
+- Accueil, clinique, services, équipe, contact/accès et demande de rendez-vous.
+- Responsive, polices locales, pas de CDN publicitaire.
+- Logo centralisé dans **`static/logo.png`**, avec adaptation carré/horizontal.
+- Numéro WhatsApp, horaires et présentation modifiables depuis Paramètres.
+- Carte exacte configurable, recherche Google Maps externe ; le schéma initial est clairement indicatif.
+- Métadonnées et JSON-LD `MedicalClinic`, sitemap/canoniques avec `PUBLIC_URL`.
+- Politique de confidentialité et mentions légales à compléter.
 
-### Gestion avec serveur et base persistante
-- Installation initiale avec code privé, comptes individuels et rôles.
-- Rendez-vous en attente, confirmation, déplacement, annulation et calendrier mensuel.
-- Plages hebdomadaires de disponibilité et suggestions de créneaux dans le formulaire.
-- Refus de deux confirmations au même horaire pour un même praticien. Le personnel reste responsable de la durée réelle, des chevauchements, des congés et des urgences.
-- Consentement aux rappels facultatif, retrait/accord manuel tracé par le personnel.
-- Préparation des rappels WhatsApp **manuels**, vérification du consentement et du statut confirmé. Le message n’est pas envoyé automatiquement et sa livraison n’est pas vérifiée.
-- Registre administratif des consultations, montants dus et encaissements ; complément de paiement ; inscription transactionnelle automatique dans les recettes.
-- Recettes, dépenses et solde de trésorerie en FCFA ; filtre mensuel ; rapports par période et export CSV.
-- Consommables, quantités, seuils d’alerte et mouvements ; refus des stocks négatifs.
-- Journal d’activité et guide de prise en main d’environ 15 minutes.
+### Espace protégé
+- Comptes individuels, rôles, bcrypt, sessions serveur 8 h, cookie HttpOnly/SameSite, CSRF, contrôle d’origine.
+- Demandes, confirmation, modification, annulation, calendrier et plages récurrentes.
+- Consentement facultatif aux rappels, retrait/accord tracés et préparation WhatsApp **manuelle**.
+- Consultations administratives, montants dus/encaissés, paiements complémentaires.
+- Recettes liées automatiquement aux consultations, dépenses, solde de trésorerie et export CSV.
+- Consommables, seuils d’alerte et mouvements de stock, sans quantité négative.
+- Journal d’activité et guide de prise en main de 15 minutes.
 
-**Aucun médecin, diplôme, horaire, numéro de téléphone, avis de patient ni service clinique n’a été inventé.** Le visuel principal est généré par IA et identifié comme tel. Le monogramme est une proposition graphique provisoire, non un logo officiel fourni par la clinique.
+Aucun numéro, horaire, service médical, médecin, diplôme ou témoignage n’a été inventé. Le visuel d’accueil est une illustration IA, pas l’équipe réelle. Le PNG fourni est toujours un symbole provisoire à remplacer par le logo officiel.
 
-## 2. Démarrage local
+## Configuration PostgreSQL/Neon
 
-Python 3.13 recommandé. Aucun Node.js ni outil de compilation n’est nécessaire pour exploiter le site.
+Le mode PostgreSQL est activé quand `DATABASE_URL` est défini.
+
+| Variable | Fonction |
+|---|---|
+| `DATABASE_URL` | Connexion privée PostgreSQL/Neon, poolée avec TLS |
+| `ENCRYPTION_KEY` | Clé Fernet stable pour les noms/téléphones patients |
+| `SETUP_KEY` | Code privé d’au moins 24 caractères pour le premier compte |
+| `COOKIE_SECURE=1` | Cookie sécurisé, obligatoire sur le site HTTPS réel |
+| `PUBLIC_URL` | Domaine public final sans slash final |
+| `TZ=Africa/Abidjan` | Fuseau prévu, les dates serveur utilisent UTC/Abidjan explicitement |
+
+Générez les secrets **sur votre appareil**, puis copiez-les dans les variables privées Vercel et votre coffre :
 
 ```bash
-cd clinique-tchiva
+python manage.py generate-secrets
+```
+
+Pas de secret dans GitHub, dans une capture ou dans les logs de build. Le fichier `.env.example` est un modèle et n’est pas chargé automatiquement. **Ne régénérez jamais ENCRYPTION_KEY pour une base existante sans migration contrôlée.**
+
+En mode PostgreSQL : aucune clé ni base n’est écrite sur disque par le serveur web. Les tables sont initialisées au premier accès aux données, pas pendant l’import/build. Les sessions et limites de requêtes sont partagées en base ; les adresses IP des compteurs sont pseudonymisées par HMAC. Les mutations critiques utilisent un verrou transactionnel inter-instance.
+
+Sur Vercel (`VERCEL=1`), une absence de `DATABASE_URL` ou une connexion sans TLS provoque une erreur de configuration explicite plutôt qu’un stockage temporaire local.
+
+## Déploiement Vercel
+
+- Importer le dépôt GitHub contenant le projet complet.
+- Root Directory : **`.`**, ou le véritable sous-dossier contenant `app.py` si vous avez volontairement imbriqué le projet.
+- Preset FastAPI/détection automatique ; conserver les réglages de build et d’output par défaut.
+- Ne pas utiliser les anciens overrides `Output Directory=public` ou le fichier de proxy `deploy/vercel/vercel.json`.
+- Ajouter les variables privées, déployer, renseigner le domaine final dans `PUBLIC_URL` et redéployer.
+- Le compte administrateur se crée à `/gestion`, avec **SETUP_KEY**, pas un fichier `data/setup.key` en mode Neon.
+- Prévoir des bases/secrets de test distincts pour Preview ; ne pas exposer la base des patients aux previews.
+
+Le code et le JSON ont été préparés selon la documentation FastAPI/Python de Vercel. **Aucun déploiement Vercel réel, aucune connexion à votre Neon et aucun push GitHub n’ont été effectués depuis cette conversation.**
+
+## Développement local
+
+Python 3.13 recommandé.
+
+```bash
 python -m venv .venv
 . .venv/bin/activate
-pip install -r requirements.txt
-TZ=Africa/Abidjan uvicorn app:app --host 0.0.0.0 --port 8000 --workers 1
+pip install -r requirements-dev.txt
+uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-Ouvrir `http://localhost:8000` dans le navigateur local. Pour un serveur distant, utiliser son domaine ou son adresse réelle, pas `localhost` dans les liens destinés aux utilisateurs.
+Sans `DATABASE_URL` et hors Vercel, le développement utilise SQLite dans `data/`, comme auparavant. Des clés locales sont alors créées dans `data/encryption.key` et `data/setup.key`. Ce mode n’est pas le déploiement Neon/Vercel.
 
-### Premier accès administrateur
-1. Ouvrir `/gestion` depuis le site, lien « Espace personnel » ou « Espace de gestion ».
-2. Lire le code sur le serveur : `cat data/setup.key` (ou la valeur de `SETUP_KEY` si configurée).
-3. Créer le compte avec votre nom, votre e-mail et un mot de passe d’au moins 12 caractères.
-4. L’installation se ferme dès que le premier compte existe. Aucun compte partagé ni mot de passe par défaut n’est livré.
-5. Dans **Paramètres**, renseigner les informations officielles puis créer les comptes du personnel.
+Pour tester PostgreSQL local ou une base Neon **de test** : définir `DATABASE_URL`, `ENCRYPTION_KEY`, `SETUP_KEY` et les variables requises avant le lancement. Ne jamais tester des mutations sur la base des vrais patients.
 
-Dans l’espace Arena de ce livrable, le fichier se trouve dans `clinique-tchiva/data/setup.key`. Il est privé et n’est jamais servi par l’application. Ne communiquez pas ce code au public. Le paquet ZIP de distribution n’inclut **ni base ni clés** ; elles sont créées sur la nouvelle installation.
+La transition vers Neon **n’importe pas les anciennes données SQLite**. Si vous avez des données existantes, sauvegarder et organiser une migration dédiée avec conservation de la clé patient. Ne pas lancer une nouvelle base vide en supposant que les données ont été déplacées.
 
-### Accès par rôle
+## Rôles
+
 | Rôle | Accès |
 |---|---|
-| Administrateur | Tous les modules, publication, comptes, suppressions de demandes non liées |
-| Accueil | Rendez-vous, calendrier, consentements, rappels manuels et consommables |
-| Équipe médicale | Rendez-vous, calendrier, consultations, encaissements liés et consommables |
-| Comptabilité | Finances, rapports, consommables, sans accès aux noms et téléphones des patients |
+| Administrateur | Tous les modules, publication, paramètres, comptes et suppressions autorisées |
+| Accueil | Rendez-vous, calendrier, consentements/rappels et consommables |
+| Équipe médicale | Rendez-vous, consultations, encaissements liés et consommables |
+| Comptabilité | Finances, rapports et consommables, sans noms/téléphones des patients |
 
-Un utilisateur peut changer son mot de passe depuis l’icône cadenas. La modification ferme ses sessions. Un administrateur peut désactiver les comptes ; cette action ferme leurs sessions.
+Un compte par personne. Le changement du mot de passe ferme les sessions du compte ; la désactivation d’un compte ferme ses sessions. L’installation initiale se ferme après le premier compte, avec protection contre deux créations simultanées.
 
-## 3. Formation courte · 15 minutes
+## Maintenance et sauvegardes
 
-Un guide interactif est disponible dans **Espace de gestion → Guide de prise en main**.
-
-1. **3 min — Informations** : modifier téléphone, WhatsApp, horaires et présentation dans Paramètres. Enregistrer puis vérifier la page Contact.
-2. **4 min — Rendez-vous** : ouvrir une demande, renseigner l’heure/praticien, confirmer et prévenir le patient. Vérifier le calendrier. Préparer un rappel uniquement avec consentement ; envoyer manuellement dans WhatsApp.
-3. **3 min — Consultation** : créer une consultation et la lier éventuellement au rendez-vous ; saisir montant dû et encaissé. Vérifier la recette automatique ; ne pas la ressaisir dans Finances. Ajouter un complément depuis le solde restant.
-4. **3 min — Finances/stock** : enregistrer une dépense ; créer un consommable ; faire une entrée ou sortie avec un motif ; exporter un CSV dans Rapports.
-5. **2 min — Sécurité** : un compte par personne, déconnexion en fin de poste, désactivation des départs, aucune information clinique dans les libellés, traitement des retraits de consentement.
-
-Effectuer ce parcours avec des données fictives **sur une base de test séparée** avant la prise de poste. Le guide est un support ; une séance humaine doit être organisée si une formation accompagnée est souhaitée.
-
-## 4. Mise en ligne à préparer
-
-### Variables d’environnement
-Le fichier `.env.example` est un modèle : il **n’est pas chargé automatiquement**. Exporter les variables via le gestionnaire de processus ou Docker.
-
-| Variable | Usage |
-|---|---|
-| `PUBLIC_URL` | Domaine HTTPS final, sans slash final ; canoniques, sitemap et validation d’origine |
-| `COOKIE_SECURE=1` | Obligatoire sur le site réel en HTTPS ; valeur locale par défaut : 0 |
-| `DATA_DIR` | Répertoire persistant privé, hors des fichiers statiques |
-| `TZ=Africa/Abidjan` | Fuseau de fonctionnement UTC ; définir avant le lancement |
-| `ENCRYPTION_KEY` | Facultatif : clé Fernet via gestionnaire de secrets ; sinon fichier privé `data/encryption.key` |
-| `SETUP_KEY` | Facultatif : code d’installation via gestionnaire de secrets ; sinon fichier privé `data/setup.key` |
-| `BACKUP_KEY` | Clé Fernet indépendante pour les sauvegardes, pas pour le serveur web |
-
-**Ne perdez jamais la clé de chiffrement des patients.** Changer cette clé sans migrer les données rend les noms et téléphones existants illisibles.
-
-### Hébergement
-- Utiliser un hébergement approprié aux données de santé et validé par la direction/conseil compétent, avec stockage persistant et responsabilités contractuelles définies.
-- Un seul processus applicatif (`--workers 1`) et un seul volume SQLite. Ne pas répartir cette version sur plusieurs instances. Pour une clinique à forte concurrence, prévoir une migration PostgreSQL, une file de tâches et un audit de sécurité.
-- Placer l’application derrière Caddy/Nginx avec HTTPS ; un exemple Caddy est fourni. Limiter les requêtes à 128 Ko et ajouter une protection antispam au niveau du proxy. Ne pas exposer directement Uvicorn au public.
-- N’autoriser les en-têtes proxy que depuis les adresses de proxy de confiance (`--proxy-headers --forwarded-allow-ips=ADRESSE_PROXY`). Ne pas mettre `*` sur un port publiquement accessible. Les limites applicatives sont en mémoire et par IP ; elles doivent être complétées par une protection en bordure.
-- Définir `PUBLIC_URL`, `COOKIE_SECURE=1`, `TZ`. Restreindre le port 8000 au proxy et les permissions du répertoire de données (0700).
-- En production, remplacer la politique `frame-ancestors` permissive de l’aperçu par `frame-ancestors 'none'` au proxy (voir exemple). Le code utilise encore des gestionnaires d’événements intégrés ; un durcissement CSP sans `unsafe-inline` nécessite leur refactorisation.
-- Mettre à jour et surveiller les dépendances, journaliser les incidents, tester une restauration et réaliser une revue de sécurité indépendante avant ouverture.
-
-### Docker, exemple
-```bash
-docker build -t clinique-tchiva .
-docker volume create tchiva-data
-docker run -d --name tchiva --restart unless-stopped \
-  -p 127.0.0.1:8000:8000 \
-  -e PUBLIC_URL=https://votre-domaine.ci -e COOKIE_SECURE=1 \
-  -v tchiva-data:/app/data clinique-tchiva
-
-docker exec tchiva cat /app/data/setup.key
-```
-Ce conteneur ne fournit pas lui-même HTTPS. Mettre un proxy devant le port privé. Configurer l’adresse de proxy de confiance pour obtenir une limitation par véritable IP client.
-
-### Google local
-Le code seul ne crée pas de fiche Google et ne garantit pas un classement. À faire par la clinique :
-1. Valider la raison sociale, les coordonnées cohérentes et le point GPS exact.
-2. Créer/revendiquer et vérifier la fiche Google Business Profile.
-3. Configurer le domaine `PUBLIC_URL`, vérifier `/sitemap.xml`, inscrire le domaine dans Search Console puis soumettre le sitemap.
-4. Faire relire les services et qualifications par la direction. Les pages fonctionnent avec JavaScript ; pour une stratégie SEO plus avancée, compléter par un rendu serveur complet du contenu et une campagne locale de contenu validé.
-
-## 5. Sauvegardes et reprise
-
-Le fichier SQLite contient aussi des informations opérationnelles non chiffrées par champ. Le chiffrement des noms et téléphones ne chiffre pas l’intégralité de la base ni le disque. La clé doit idéalement être séparée du disque de données en exploitation.
-
-L’outil utilise l’API SQLite Backup pour obtenir une copie cohérente, puis chiffre l’archive contenant la base et la clé patient avec une **clé de sauvegarde indépendante**.
+Exécuter les outils sur un poste privé, avec les variables de la base concernée, **pas comme route web ou commande de build Vercel**.
 
 ```bash
-# Générer une clé de sauvegarde et la conserver dans un coffre distinct.
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-# Exporter BACKUP_KEY dans le processus via un gestionnaire de secrets, puis :
-python manage.py backup --output /chemin-prive/tchiva-2026-10-14.fernet
+python manage.py init-db
+python manage.py reset-password --email utilisateur@votre-domaine.ci
+python manage.py backup --output /chemin-prive/sauvegarde.fernet
 ```
 
-Automatiser une sauvegarde quotidienne, copie hors serveur, accès restreint et rotation validée. Ne pas stocker `BACKUP_KEY` avec les archives. L’outil n’installe pas de tâche planifiée.
+- `backup` requiert **BACKUP_KEY** indépendante et conservée hors des archives.
+- PostgreSQL : installer un `pg_dump` compatible ; une connexion directe peut être définie dans `DATABASE_URL_UNPOOLED` pour la maintenance.
+- SQLite local : l’outil utilise SQLite Backup.
+- L’archive est chiffrée et contient la base/dump et la clé de chiffrement des patients.
+- Aucune tâche planifiée n’est installée. Définir fréquence, rotation, stockage hors application, accès, responsabilités et restauration testée.
+- Les fonctions d’un plan Neon ne doivent pas être présumées couvrir toutes les obligations : vérifier les capacités du plan choisi.
+- Pour restaurer : déchiffrer sur un environnement isolé, restaurer dans une base vide avec les outils adaptés, utiliser la même ENCRYPTION_KEY, fermer les sessions restaurées, puis vérifier données et totaux. Ne pas écraser une base active sans plan de reprise.
 
-**Restauration :** sur un environnement isolé, déchiffrer avec `Fernet(BACKUP_KEY).decrypt(...)`, décompresser l’archive, arrêter l’application cible, restaurer `tchiva.sqlite3` et la clé patient (ou la même `ENCRYPTION_KEY`), restreindre les permissions, supprimer les sessions restaurées (`DELETE FROM sessions`) puis relancer. Vérifier les lectures et les totaux avant remise en service. Ne pas écraser une production active sans plan de reprise validé.
-
-Mot de passe perdu (accès serveur requis) :
-```bash
-python manage.py reset-password --email utilisateur@domaine.ci
-```
-
-## 6. Périmètre et limites à connaître
-
-- Les services, médecins, contacts, horaires, carte exacte, informations juridiques et politique de conservation restent à renseigner/valider.
-- Les demandes en ligne sont non urgentes, sans diagnostic ni motif médical libre. L’application est un registre administratif, pas un dossier de soins, un outil de prescription ou un dispositif de décision médicale.
-- Les rappels sont manuels, pas de fournisseur SMS/WhatsApp API, pas d’e-mail transactionnel et pas de tâche automatique de rappel. Aucun message n’est envoyé simplement en enregistrant un rendez-vous.
-- Le calendrier n’intègre pas les jours fériés, congés ou fermetures exceptionnelles ; le personnel confirme individuellement les demandes. La contrainte de collision porte sur une heure exacte, pas sur la durée réelle d’un acte.
-- Le stock ne gère pas les lots, médicaments, dates de péremption ni fournisseurs.
-- Pas de facturation fiscale, reçu réglementaire numéroté, paiement en ligne, rapprochement bancaire ou certification comptable. Le solde de trésorerie n’est pas un résultat comptable. Faire valider les besoins légaux avant de remplacer un outil de facturation existant.
-- Les écritures sont conservées et auditées ; pas de suppression financière depuis l’interface. Les ajustements doivent être documentés.
-- Les listes affichent les 2 000 rendez-vous/consultations et 5 000 transactions les plus récents. Les indicateurs de listes et graphiques peuvent donc être partiels au-delà ; le CSV couvre toutes les écritures de la période. Faire évoluer vers une pagination/agrégation serveur avant ces volumes.
-- Les demandes non liées peuvent être supprimées par un administrateur. Les durées de conservation sont des objectifs indicatifs ; aucune purge automatique ni procédure complète d’anonymisation médicale/comptable n’est mise en place. La direction doit définir et appliquer le traitement des droits et les obligations de conservation.
-- Pas de double authentification ni de portail patient. Mot de passe oublié : outil serveur sécurisé ou administrateur technique, pas de lien public de réinitialisation.
-- Les comptes utilisent bcrypt ; sessions 8 h côté serveur avec cookie HttpOnly/SameSite, CSRF et contrôle des rôles. Ces mesures ne remplacent pas un audit ou des procédures organisationnelles.
-
-## 7. Tests
+## Tests
 
 ```bash
+# SQLite local temporaire
 pytest -q tests/test_app.py
-```
-Neuf tests d’intégration couvrent les accès, l’installation, CSRF/origine, la validation et le chiffrement des coordonnées, les collisions de créneaux, le consentement/retrait, les encaissements transactionnels et leurs plafonds, le stock négatif, les exports CSV, les brouillons, les rôles et les limites de requêtes. Les tests utilisent une base temporaire séparée.
 
-Recette navigateur (Playwright, uniquement sur base jetable) : voir `tests/browser_smoke.py`. Ne pas exécuter ce script sur la base réelle.
-
-## 8. Structure
-```
-app.py                 API FastAPI, authentification, données et pages
-manage.py              sauvegarde chiffrée et récupération de compte
-static/                interface, polices locales, icônes, visuel
-requirements.txt       dépendances verrouillées
-Dockerfile             image non-root, volume de données externe
-Caddyfile.example      exemple de frontal HTTPS à adapter
-tests/                 tests API et recette navigateur
-DATA_DIR/              base, clé de chiffrement, code d’installation (privé)
+# PostgreSQL temporaire exclusivement — la fixture SUPPRIME les données de test
+TCHIVA_TEST_DB_CONFIRM=DELETE_TEST_DATA TEST_DATABASE_URL='votre-connexion-privee-de-test' pytest -q tests/test_app.py
 ```
 
-Les polices DM Sans et DM Serif Display sont embarquées localement (licences OFL dans `static/`). Aucun CDN, outil publicitaire ni mesure d’audience n’est chargé. Google Maps ne s’intègre que si configuré ; les autres liens externes sont actionnés par l’utilisateur.
+**TEST_DATABASE_URL doit viser une base jetable vide, jamais une base contenant des patients.**
+
+13 tests ont réussi avec SQLite et avec PostgreSQL 17 local : installation, rôles, auth/CSRF/origine, coordonnées chiffrées, consentement/retrait, collisions de créneaux, consultations/paiements, stocks, CSV, métadonnées/logo, demandes limitées entre clients, concurrence de paiements et mouvements, absence de fichiers ou de connexion à l’import en mode Vercel.
+
+Une recette navigateur est fournie dans `tests/browser_smoke.py` pour une application de test initialement vide sur le port 8001. Elle nécessite Playwright/Chromium et ne doit pas viser une application réelle.
+
+Ces tests ne constituent pas une certification de sécurité ou de conformité et ne remplacent pas la recette sur votre projet Neon/Vercel.
+
+## Limites avant usage réel
+
+- **Données de santé :** validation de la localisation/résidence et des transferts, contrats, formalités en Côte d’Ivoire, confidentialité, conservation et procédures d’accès/suppression indispensables avant de saisir de vraies informations. La disponibilité technique de Neon/Vercel n’est pas une approbation réglementaire.
+- **Registre administratif :** pas de dossier médical, diagnostic, prescription, résultat d’analyse, outil d’aide à la décision ou service d’urgence.
+- **Rappels :** manuels avec consentement, pas de fournisseur automatique SMS/WhatsApp Business API, pas de vérification de livraison.
+- **Calendrier :** les plages sont indicatives ; pas de congés, jours fériés ou fermetures exceptionnelles. La collision est contrôlée sur une heure exacte pour un praticien, pas sur la durée réelle de l’acte.
+- **Stocks :** quantités de consommables uniquement, pas de lots, péremptions, pharmacie ou prescriptions.
+- **Finances :** pas de facturation fiscale certifiée, reçus réglementaires numérotés, paiement en ligne ou rapprochement bancaire. Le solde de trésorerie n’est pas un bénéfice. Les écritures ne sont pas supprimables depuis l’interface ; les ajustements doivent être documentés.
+- **Volumes :** listes limitées à 2 000 rendez-vous/consultations et 5 000 transactions récentes ; les statistiques des listes peuvent être partielles au-delà, contrairement au CSV qui exporte la période entière. Prévoir pagination et agrégations serveur avant ces volumes.
+- **Conservation :** durée cible paramétrable mais aucune purge automatique. Les demandes non liées peuvent être supprimées par l’administrateur ; une procédure complète d’anonymisation médicale/comptable et de traitement des droits doit être définie.
+- **Sécurité :** pas de MFA ni de portail patient. La limitation partagée ne remplace pas un WAF/antispam. Les scripts utilisent encore des gestionnaires intégrés et la CSP autorise `unsafe-inline` ; prévoir un durcissement et une revue indépendante.
+- **Privilèges et migrations :** l’initialisation automatique utilise des droits DDL ; séparer les migrations du rôle applicatif est une amélioration à préparer pour un durcissement de production. Les prochains changements de schéma nécessiteront des migrations versionnées.
+- **Google :** la fiche Google Business Profile et Search Console restent à créer/vérifier par la clinique. Aucun classement garanti.
+
+## Structure
+
+```text
+app.py                    API, authentification et pages
+database.py               Transactions, schéma PostgreSQL/SQLite et compatibilité
+manage.py                 Outils privés et génération locale des secrets
+vercel.json               Réglages de cache de l’API/gestion, sans proxy externe
+.python-version           Python 3.13
+.vercelignore             Exclusion des données et secrets des déploiements
+requirements.txt          Dépendances d’exploitation dont psycopg
+requirements-dev.txt      Dépendances de test
+static/                   Logo, interface, images, polices et licences
+tests/                    Tests API et recette navigateur
+GUIDE-NEON-VERCEL.md       Procédure pas à pas adaptée au dépôt de la clinique
+```
+
+Le `Dockerfile` et `Caddyfile.example` restent des options pour un hébergement Python classique ; ils ne sont pas requis pour le déploiement direct sur Vercel. Les polices DM Sans et DM Serif Display sont locales et leurs licences OFL sont incluses.

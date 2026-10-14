@@ -1,0 +1,13 @@
+data/
+.env
+.env.*
+.venv/
+__pycache__/
+.pytest_cache/
+tests/
+*.key
+*.sqlite3*
+*.fernet
+*.dump
+*.pgdump
+.git/

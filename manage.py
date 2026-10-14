@@ -1,44 +1,76 @@
-"""Outils d’exploitation. À exécuter uniquement par l'administrateur serveur."""
-import argparse, os, sqlite3, getpass, secrets, hashlib
+"""Maintenance hors ligne : exécuter sur votre ordinateur/serveur, pas en Build Command."""
+import argparse, os, getpass, secrets, base64
 from pathlib import Path
 from datetime import datetime,timezone
-p=argparse.ArgumentParser(description='Maintenance Clinique Tchiva')
-p.add_argument('command',choices=['backup','reset-password'])
-p.add_argument('--output',help='Fichier de sauvegarde chiffré .fernet')
-p.add_argument('--email',help='Compte à réinitialiser')
-a=p.parse_args()
-root=Path(__file__).parent;data=Path(os.environ.get('DATA_DIR',root/'data'));db=data/'tchiva.sqlite3'
-if not db.exists():p.error('Base introuvable. Démarrez l’application au moins une fois.')
-if a.command=='reset-password':
-    if not a.email:p.error('--email requis')
-    import bcrypt
-    password=getpass.getpass('Nouveau mot de passe (12 caractères minimum) : ')
-    if len(password)<12 or len(password.encode())>72:p.error('12 caractères minimum, 72 octets maximum.')
-    if password!=getpass.getpass('Confirmez : '):p.error('Les mots de passe diffèrent.')
-    with sqlite3.connect(db) as c:
-        r=c.execute('SELECT id FROM users WHERE email=?',(a.email.lower().strip(),)).fetchone()
-        if not r:p.error('Compte introuvable')
-        c.execute('UPDATE users SET password=? WHERE id=?',(bcrypt.hashpw(password.encode(),bcrypt.gensalt()),r[0]))
-        c.execute('DELETE FROM sessions WHERE user_id=?',(r[0],))
-        c.execute('INSERT INTO audit(user_id,action,entity,created_at) VALUES(?,?,?,?)',(r[0],'Réinitialisation serveur du mot de passe',r[0],datetime.now(timezone.utc).isoformat()))
-    print('Mot de passe modifié. Sessions fermées.')
-else:
+
+def main():
+    p=argparse.ArgumentParser(description='Maintenance Clinique Tchiva — Neon/PostgreSQL ou SQLite local')
+    p.add_argument('command',choices=['generate-secrets','init-db','backup','reset-password'])
+    p.add_argument('--output',help='Archive de sauvegarde chiffrée .fernet')
+    p.add_argument('--email',help='Compte à réinitialiser')
+    a=p.parse_args()
+    if a.command=='generate-secrets':
+        print('À copier dans les variables privées Vercel et dans votre coffre. NE PAS committer ni partager.')
+        print('ENCRYPTION_KEY='+base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())
+        print('SETUP_KEY='+secrets.token_urlsafe(32))
+        print('BACKUP_KEY='+base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())
+        print('Ne régénérez pas ENCRYPTION_KEY après les premières données.')
+        return
+    import app as m
+    m.STORE.initialize(m.DEFAULT)
+    if a.command=='init-db':
+        print('Schéma initialisé :','PostgreSQL' if m.STORE.postgres else 'SQLite local')
+        return
+    if a.command=='reset-password':
+        if not a.email:p.error('--email requis')
+        password=getpass.getpass('Nouveau mot de passe (12 caractères minimum) : ')
+        if password!=getpass.getpass('Confirmez : '):p.error('Les mots de passe diffèrent.')
+        hashed=m.password_hash(password)
+        with m.db() as c:
+            r=c.execute('SELECT id FROM users WHERE email=?',(a.email.lower().strip(),)).fetchone()
+            if not r:p.error('Compte introuvable')
+            c.execute('UPDATE users SET password=? WHERE id=?',(hashed,r[0]))
+            c.execute('DELETE FROM sessions WHERE user_id=?',(r[0],))
+            c.execute('INSERT INTO audit(user_id,action,entity,created_at) VALUES(?,?,?,?)',(r[0],'Réinitialisation locale du mot de passe',str(r[0]),m.now()))
+        print('Mot de passe modifié. Sessions fermées.')
+        return
     if not a.output:p.error('--output requis')
+    backup_key=os.environ.get('BACKUP_KEY','')
+    if not backup_key:p.error('BACKUP_KEY requise ; utilisez une clé distincte conservée hors du site.')
     from cryptography.fernet import Fernet
-    key=os.environ.get('BACKUP_KEY')
-    if not key:p.error('BACKUP_KEY requise : clé Fernet distincte, conservée hors du serveur.')
-    import tempfile,zipfile,io,json
+    try:cipher=Fernet(backup_key.encode())
+    except Exception:p.error('BACKUP_KEY doit être une clé Fernet valide.')
+    import tempfile,zipfile,io,json,sqlite3,subprocess
     with tempfile.TemporaryDirectory() as tmp:
-        target=Path(tmp)/'tchiva.sqlite3'
-        src=sqlite3.connect(db);dst=sqlite3.connect(target);src.backup(dst);dst.close();src.close()
+        target=Path(tmp)/('tchiva.pgdump' if m.STORE.postgres else 'tchiva.sqlite3')
+        if m.STORE.postgres:
+            # Le client PostgreSQL doit être installé sur le poste de maintenance.
+            # La DSN n'est jamais passée dans les arguments visibles ou affichée.
+            from psycopg.conninfo import conninfo_to_dict
+            info=conninfo_to_dict(os.environ.get('DATABASE_URL_UNPOOLED') or m.STORE.url)
+            names={'dbname':'PGDATABASE','application_name':'PGAPPNAME','connect_timeout':'PGCONNECT_TIMEOUT','channel_binding':'PGCHANNELBINDING','target_session_attrs':'PGTARGETSESSIONATTRS'}
+            env=dict(os.environ)
+            # PGDATABASE seul n'interprète pas une URI complète dans pg_dump.
+            # Transmettre chaque paramètre via libpq garde les secrets hors argv.
+            for name in list(env):
+                if name.startswith('PG'):env.pop(name,None)
+            for key,value in info.items():env[names.get(key,'PG'+key.replace('_','').upper())]=value
+            try:
+                r=subprocess.run(['pg_dump','--format=custom','--no-owner','--no-acl','--file',str(target)],env=env,capture_output=True)
+            except FileNotFoundError:p.error('Installez pg_dump compatible avec la version du serveur PostgreSQL.')
+            if r.returncode:p.error('Échec de pg_dump ; vérifiez les accès, la version du client et la connexion directe, sans publier les secrets.')
+        else:
+            src=sqlite3.connect(m.DB);dst=sqlite3.connect(target)
+            src.backup(dst);dst.close();src.close()
         buffer=io.BytesIO()
         with zipfile.ZipFile(buffer,'w',zipfile.ZIP_DEFLATED) as z:
-            z.write(target,'tchiva.sqlite3')
-            encryption=os.environ.get('ENCRYPTION_KEY') or (data/'encryption.key').read_text().strip()
-            z.writestr('encryption.key',encryption)
-            z.writestr('metadata.json',json.dumps({'created_at':datetime.now(timezone.utc).isoformat(),'app':'Clinique Tchiva','format':1}))
-        encrypted=Fernet(key.encode()).encrypt(buffer.getvalue())
+            z.write(target,target.name)
+            z.writestr('encryption.key',m.KEY)
+            z.writestr('metadata.json',json.dumps({'created_at':datetime.now(timezone.utc).isoformat(),'app':'Clinique Tchiva','backend':'postgresql' if m.STORE.postgres else 'sqlite','format':2}))
+        encrypted=cipher.encrypt(buffer.getvalue())
         fd=os.open(a.output,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
         with os.fdopen(fd,'wb') as f:f.write(encrypted)
     print('Sauvegarde cohérente et chiffrée créée :',a.output)
     print('Conservez BACKUP_KEY séparément. Testez la restauration hors production.')
+
+if __name__=='__main__':main()

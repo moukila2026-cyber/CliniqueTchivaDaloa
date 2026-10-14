@@ -3,7 +3,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=Africa/Abidjan DATA_DIR=/app
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && useradd --create-home --uid 10001 clinic
-COPY --chown=clinic:clinic app.py manage.py ./
+COPY --chown=clinic:clinic app.py database.py manage.py ./
 COPY --chown=clinic:clinic static ./static
 RUN mkdir /app/data && chown clinic:clinic /app/data && chmod 700 /app/data
 USER clinic
