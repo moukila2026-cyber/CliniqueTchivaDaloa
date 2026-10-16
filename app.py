@@ -101,6 +101,9 @@ async def security(request,call_next):
     if request.url.path.startswith('/api') or request.url.path.startswith('/gestion'):
         response.headers['Cache-Control']='private, no-store'
         response.headers['Vercel-CDN-Cache-Control']='no-store'
+    path=request.url.path
+    if path.startswith('/static/img/') or path.startswith('/static/font-') or path.endswith('.jpg'):
+        response.headers.setdefault('Cache-Control','public, max-age=86400, stale-while-revalidate=604800')
     if SECURE: response.headers['Strict-Transport-Security']='max-age=31536000; includeSubDomains'
     return response
 
@@ -554,6 +557,16 @@ def report(start:str,end:str,user=Depends(auth)):
         log(c,user,'Export financier',f'{start} / {end}')
     return Response('\ufeff'+out.getvalue(),media_type='text/csv; charset=utf-8',headers={'Content-Disposition':f'attachment; filename="tchiva-finances-{start}-{end}.csv"'})
 
+PUBLIC_PAGES={
+ '':('Clinique Tchiva à Daloa · Votre santé, notre priorité','Clinique Tchiva à Daloa, Tazibouo, en face du Collège La Paix : urgences médicales 24h/24, médecine générale, ophtalmologie, ORL, laboratoire, chirurgie et demande de rendez-vous en ligne.'),
+ 'clinique':('La clinique · Clinique Tchiva Daloa','Découvrez la Clinique Tchiva à Tazibouo, Daloa : accueil, orientation, prise en charge assurance et urgences 24h/24.'),
+ 'services':('Nos services · Clinique Tchiva Daloa','Médecine générale, ophtalmologie, ORL, laboratoire d’analyses et chirurgie : fiches pratiques et consignes pour préparer votre venue à la Clinique Tchiva.'),
+ 'equipe':('Notre équipe · Clinique Tchiva Daloa','Équipe médicale de la Clinique Tchiva à Daloa : les profils sont publiés après validation par la direction.'),
+ 'contact':('Contact & accès à Tazibouo · Clinique Tchiva','Adresse, carte Google Maps, Plus Code WH48+HFJ Daloa, numéros du standard, des urgences 24h/24 et de l’accueil de la Clinique Tchiva.'),
+ 'rendez-vous':('Demande de rendez-vous · Clinique Tchiva Daloa','Demandez un rendez-vous à la Clinique Tchiva de Daloa : demande enregistrée et envoyée sur WhatsApp, confirmation par l’accueil.'),
+ 'confidentialite':('Confidentialité · Clinique Tchiva Daloa','Politique de confidentialité du site de la Clinique Tchiva : données collectées, usage, conservation et droits.'),
+ 'mentions-legales':('Mentions légales · Clinique Tchiva Daloa','Mentions légales du site de la Clinique Tchiva, Tazibouo, Daloa.'),
+}
 @app.get('/robots.txt')
 def robots():
     return Response('User-agent: *\nAllow: /\nDisallow: /gestion\nDisallow: /api/\n'+(f'Sitemap: {BASE_URL}/sitemap.xml\n' if BASE_URL else ''),media_type='text/plain')
@@ -561,17 +574,22 @@ def robots():
 def sitemap():
     if not BASE_URL:return Response('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>',media_type='application/xml')
     from html import escape
-    return Response('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+''.join(f'<url><loc>{escape(BASE_URL+p)}</loc></url>' for p in ['/','/clinique','/services','/equipe','/contact','/rendez-vous'])+'</urlset>',media_type='application/xml')
+    return Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+''.join(f'<url><loc>{escape(BASE_URL+"/"+p)}</loc></url>' for p in PUBLIC_PAGES)+'</urlset>',media_type='application/xml')
 app.mount('/static',StaticFiles(directory=ROOT/'static'),name='static')
 @app.get('/{path:path}')
 def frontend(path:str=''):
-    if path and path not in ['clinique','services','equipe','contact','rendez-vous','confidentialite','mentions-legales','gestion'] and not path.startswith('gestion/'):raise HTTPException(404,'Page introuvable.')
+    path=path.strip('/')
+    if path.startswith('api/') or path.startswith('static/'):raise HTTPException(404,'Ressource introuvable.')
+    known=path in PUBLIC_PAGES or path=='gestion' or path.startswith('gestion/')
     html=(ROOT/'static/index.html').read_text()
     s=settings()
     from html import escape
-    titles={'':'Clinique Tchiva à Daloa · Votre santé, notre priorité','services':'Services et spécialités · Clinique Tchiva Daloa','equipe':'Équipe médicale · Clinique Tchiva Daloa','contact':'Contact et accès à Tazibouo · Clinique Tchiva','rendez-vous':'Demande de rendez-vous · Clinique Tchiva Daloa','clinique':'Notre clinique à Daloa · Clinique Tchiva'}
-    html=html.replace('__TITLE__',escape(titles.get(path,'Clinique Tchiva · Espace sécurisé')))
-    schema={'@context':'https://schema.org','@type':'MedicalClinic','name':s['name'],'address':{'@type':'PostalAddress','streetAddress':s['address'],'addressLocality':s['city'],'addressCountry':'CI'}}
+    title,description=PUBLIC_PAGES.get(path,('Clinique Tchiva · Espace sécurisé' if known else 'Page introuvable · Clinique Tchiva Daloa',PUBLIC_PAGES[''][1]))
+    html=html.replace('__TITLE__',escape(title))
+    html=html.replace('__DESCRIPTION__',escape(description,quote=True))
+    # Image principale préchargée sur l’accueil (meilleur affichage initial).
+    html=html.replace('__PRELOAD__','<link rel="preload" as="image" href="/static/hero-clinic.jpg" imagesrcset="/static/hero-clinic-720.jpg 720w, /static/hero-clinic.jpg 1400w" imagesizes="(max-width: 860px) 100vw, 46vw" fetchpriority="high">' if path=='' else '')
+    schema={'@context':'https://schema.org','@type':'MedicalClinic','name':s['name'],'description':PUBLIC_PAGES[''][1],'address':{'@type':'PostalAddress','streetAddress':s['address'],'addressLocality':s['city'],'addressCountry':'CI'}}
     phones=[x for x in (s['phone'],s.get('emergency_phone','')) if x]
     if phones:schema['telephone']=phones[0] if len(phones)==1 else phones
     try:
@@ -581,12 +599,14 @@ def frontend(path:str=''):
     except ValueError:pass
     if s.get('plus_code'):schema['plusCode']=s['plus_code']
     if s.get('specialties'):schema['medicalSpecialty']=[x['name'] for x in s['specialties'] if x.get('published')]
+    if s.get('insurances'):schema['paymentAccepted']='Tiers-payant : '+', '.join(s['insurances'])
     if BASE_URL:
         schema['url']=BASE_URL
         schema['logo']=BASE_URL+'/static/logo.png'
-        schema['image']=BASE_URL+'/static/logo.png'
-    html=html.replace('__LOGO_META__',f'<meta property="og:image" content="{escape(BASE_URL+"/static/logo.png",quote=True)}"><meta property="og:image:alt" content="Logo de la Clinique Tchiva">' if BASE_URL else '')
+        schema['image']=[BASE_URL+'/static/hero-clinic.jpg',BASE_URL+'/static/logo.png']
+    html=html.replace('__LOGO_META__',f'<meta property="og:image" content="{escape(BASE_URL+"/static/hero-clinic.jpg",quote=True)}"><meta property="og:image:alt" content="Clinique Tchiva à Daloa (illustration)"><meta property="og:url" content="{escape(BASE_URL+"/"+path,quote=True)}">' if BASE_URL else '')
     html=html.replace('__SCHEMA__',json.dumps(schema,ensure_ascii=False).replace('<','\\u003c'))
-    html=html.replace('__CANONICAL__',f'<link rel="canonical" href="{escape(BASE_URL+"/"+path,quote=True)}">' if BASE_URL else '')
-    html=html.replace('__ROBOTS__','noindex, nofollow' if path.startswith('gestion') else 'index, follow')
-    return Response(html,media_type='text/html')
+    html=html.replace('__CANONICAL__',f'<link rel="canonical" href="{escape(BASE_URL+"/"+path,quote=True)}">' if BASE_URL and path in PUBLIC_PAGES else '')
+    html=html.replace('__ROBOTS__','noindex, nofollow' if (path.startswith('gestion') or not known) else 'index, follow')
+    # Une adresse inconnue renvoie la page « introuvable » de l’interface avec un vrai statut 404.
+    return Response(html,media_type='text/html',status_code=200 if known else 404)
