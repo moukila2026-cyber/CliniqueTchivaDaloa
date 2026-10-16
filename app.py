@@ -44,8 +44,15 @@ def enc(x): return CIPHER.encrypt(str(x).encode()).decode()
 def dec(x): return CIPHER.decrypt(x.encode()).decode() if x else ''
 def digest(x): return hashlib.sha256(x.encode()).hexdigest()
 DEFAULT={
- 'name':'Clinique Tchiva','address':'Tazibouo, en face du Collège La Paix','city':'Daloa','phone':'','whatsapp':'','email':'','hours':'','about':'Au cœur de Daloa, la Clinique Tchiva vous accueille à Tazibouo, en face du Collège La Paix. Contactez notre accueil pour vous renseigner et organiser votre venue.',
- 'specialties':[], 'team':[], 'schedules':[], 'map_url':'', 'privacy_contact':'', 'retention_days':180
+ 'name':'Clinique Tchiva','address':'Tazibouo, en face du Collège La Paix','city':'Daloa','phone':'+225 27 24 37 50 80','whatsapp':'+225 07 88 97 55 16','email':'','hours':'Accueil et consultations disponibles du lundi au samedi et urgences 24h/24.','about':'Au cœur de Daloa, la Clinique Tchiva vous accueille à Tazibouo, en face du Collège La Paix. Une équipe dévouée pour votre santé et celle de vos proches. Contactez notre accueil pour vous renseigner et organiser votre venue.',
+ 'specialties':[
+   {'name':'Médecine générale','description':'Consultations médicales générales, bilans de santé, suivi des pathologies courantes pour adultes et enfants.','published':True},
+   {'name':'Ophtalmologie','description':'Dépistage, examens visuels, soins oculaires et suivi des affections de la vision.','published':True},
+   {'name':'ORL','description':'Oto-rhino-laryngologie : consultations, diagnostics et traitements des affections des oreilles, du nez et de la gorge.','published':True},
+   {'name':'Laboratoire','description':'Prélèvements, analyses biologiques et examens de laboratoire sur place.','published':True},
+   {'name':'Chirurgie','description':'Consultations chirurgicales, actes spécialisés et interventions adaptées.','published':True}
+ ],
+ 'team':[], 'schedules':[], 'map_url':'https://www.google.com/maps?q=6.90645,-6.43381&output=embed', 'privacy_contact':'', 'retention_days':180
 }
 
 def settings():
@@ -464,7 +471,7 @@ def save_settings(p:Settings,user=Depends(auth)):
     if p.phone:valid_phone(p.phone)
     if p.whatsapp:valid_phone(p.whatsapp)
     if p.email:email_valid(p.email)
-    if p.map_url and not p.map_url.startswith('https://www.google.com/maps/embed?'):raise HTTPException(422,'Utilisez une URL d’intégration https://www.google.com/maps/embed?...')
+    if p.map_url and not (p.map_url.startswith('https://www.google.com/maps/embed?') or p.map_url.startswith('https://www.google.com/maps?')):raise HTTPException(422,'Utilisez une URL d’intégration https://www.google.com/maps?...')
     names=[x.name for x in p.team if x.published]
     for s in p.schedules:
         if s.end<=s.start:raise HTTPException(422,'La fin d’une plage doit être après le début.')
