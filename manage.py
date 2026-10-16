@@ -7,7 +7,7 @@ def main():
     p=argparse.ArgumentParser(description='Maintenance Clinique Tchiva — Neon/PostgreSQL ou SQLite local')
     p.add_argument('command',choices=['generate-secrets','init-db','backup','reset-password'])
     p.add_argument('--output',help='Archive de sauvegarde chiffrée .fernet')
-    p.add_argument('--email',help='Compte à réinitialiser')
+    p.add_argument('--phone',help='Téléphone du compte à réinitialiser')
     a=p.parse_args()
     if a.command=='generate-secrets':
         print('À copier dans les variables privées Vercel et dans votre coffre. NE PAS committer ni partager.')
@@ -21,17 +21,18 @@ def main():
         print('Schéma initialisé :','PostgreSQL' if m.STORE.postgres else 'SQLite local')
         return
     if a.command=='reset-password':
-        if not a.email:p.error('--email requis')
-        password=getpass.getpass('Nouveau mot de passe (12 caractères minimum) : ')
-        if password!=getpass.getpass('Confirmez : '):p.error('Les mots de passe diffèrent.')
+        if not a.phone:p.error('--phone requis')
+        password=getpass.getpass('Nouveau code personnel (12 caractères minimum) : ')
+        if password!=getpass.getpass('Confirmez : '):p.error('Les codes diffèrent.')
         hashed=m.password_hash(password)
+        phone_norm=m.normalize_phone(a.phone.strip())
         with m.db() as c:
-            r=c.execute('SELECT id FROM users WHERE email=?',(a.email.lower().strip(),)).fetchone()
+            r=c.execute('SELECT id FROM users WHERE phone=?',(phone_norm,)).fetchone()
             if not r:p.error('Compte introuvable')
             c.execute('UPDATE users SET password=? WHERE id=?',(hashed,r[0]))
             c.execute('DELETE FROM sessions WHERE user_id=?',(r[0],))
-            c.execute('INSERT INTO audit(user_id,action,entity,created_at) VALUES(?,?,?,?)',(r[0],'Réinitialisation locale du mot de passe',str(r[0]),m.now()))
-        print('Mot de passe modifié. Sessions fermées.')
+            c.execute('INSERT INTO audit(user_id,action,entity,created_at) VALUES(?,?,?,?)',(r[0],'Réinitialisation locale du code personnel',str(r[0]),m.now()))
+        print('Code personnel modifié. Sessions fermées.')
         return
     if not a.output:p.error('--output requis')
     backup_key=os.environ.get('BACKUP_KEY','')

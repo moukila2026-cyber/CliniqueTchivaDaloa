@@ -86,7 +86,7 @@ class Database:
                 real='DOUBLE PRECISION' if self.postgres else 'REAL'
                 c.executescript(f'''
                 CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY CHECK(id=1), data TEXT NOT NULL);
-                CREATE TABLE IF NOT EXISTS users(id {identity}, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password {blob} NOT NULL, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1);
+                CREATE TABLE IF NOT EXISTS users(id {identity}, name TEXT NOT NULL DEFAULT '', first_name TEXT NOT NULL DEFAULT '', last_name TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', password {blob} NOT NULL, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1);
                 CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id), csrf TEXT NOT NULL, expires {real} NOT NULL);
                 CREATE TABLE IF NOT EXISTS appointments(id {identity}, reference TEXT UNIQUE NOT NULL, patient TEXT NOT NULL, phone TEXT NOT NULL, service TEXT NOT NULL, practitioner TEXT NOT NULL DEFAULT '', day TEXT NOT NULL, slot TEXT NOT NULL, consent INTEGER NOT NULL, privacy_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL);
                 CREATE UNIQUE INDEX IF NOT EXISTS confirmed_slot ON appointments(day,slot,practitioner) WHERE status='confirmed' AND slot!='';
@@ -101,6 +101,43 @@ class Database:
                 CREATE INDEX IF NOT EXISTS appointment_day ON appointments(day,status);
                 CREATE INDEX IF NOT EXISTS transaction_day ON transactions(day);
                 ''')
+                # Migration douce : ajouter les colonnes de connexion par téléphone si absentes.
+                self._migrate_users_phone(c)
                 c.execute('INSERT INTO settings(id,data) VALUES(1,?) ON CONFLICT(id) DO NOTHING',(json.dumps(default,ensure_ascii=False),))
             if not self.postgres:os.chmod(self.path,0o600)
             self._ready=True
+
+    def _migrate_users_phone(self,c):
+        """Migration douce : ajoute first_name, last_name, phone aux anciennes bases."""
+        if self.postgres:
+            # Vérifie si la colonne phone existe déjà.
+            row=c.execute("SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='phone')").fetchone()
+            has_phone=row[0] if row else False
+            if not has_phone:
+                c.execute("ALTER TABLE users ADD COLUMN first_name TEXT DEFAULT ''")
+                c.execute("ALTER TABLE users ADD COLUMN last_name TEXT DEFAULT ''")
+                c.execute("ALTER TABLE users ADD COLUMN phone TEXT DEFAULT ''")
+                # Rendre email non-obligatoire pour la compatibilité.
+                c.execute("ALTER TABLE users ALTER COLUMN email DROP NOT NULL")
+                c.execute("ALTER TABLE users ALTER COLUMN email SET DEFAULT ''")
+                # Migrer les données existantes : diviser name en first_name + last_name.
+                for row in c.execute("SELECT id, name FROM users WHERE name != ''"):
+                    parts=str(row['name']).strip().split(' ',1)
+                    if len(parts)==2:
+                        c.execute("UPDATE users SET last_name=%s, first_name=%s WHERE id=%s",(parts[0].strip(),parts[1].strip(),row['id']))
+                    elif parts[0]:
+                        c.execute("UPDATE users SET last_name=%s WHERE id=%s",(parts[0].strip(),row['id']))
+        else:
+            # SQLite : vérifier les colonnes via PRAGMA.
+            cols=[r[1] for r in c.execute("PRAGMA table_info(users)").fetchall()]
+            if 'phone' not in cols:
+                c.execute("ALTER TABLE users ADD COLUMN first_name TEXT DEFAULT ''")
+                c.execute("ALTER TABLE users ADD COLUMN last_name TEXT DEFAULT ''")
+                c.execute("ALTER TABLE users ADD COLUMN phone TEXT DEFAULT ''")
+                # Migrer les données existantes.
+                for row in c.execute("SELECT id, name FROM users WHERE name != ''"):
+                    parts=str(row[1]).strip().split(' ',1)
+                    if len(parts)==2:
+                        c.execute("UPDATE users SET last_name=?, first_name=? WHERE id=?",(parts[0].strip(),parts[1].strip(),row[0]))
+                    elif parts[0]:
+                        c.execute("UPDATE users SET last_name=? WHERE id=?",(parts[0].strip(),row[0]))

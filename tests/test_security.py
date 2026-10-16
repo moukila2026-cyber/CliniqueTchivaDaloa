@@ -26,7 +26,7 @@ os.environ['ENCRYPTION_KEY'] = _test_key
 # Définir les variables pour le compte initial admin.
 os.environ['ADMIN_NOM'] = 'Test'
 os.environ['ADMIN_PRENOM'] = 'Admin'
-os.environ['ADMIN_EMAIL'] = 'admin@test.ci'
+os.environ['ADMIN_TEL'] = '+2250707995414'
 os.environ['ADMIN_PASSWORD'] = 'MotDePasse1234!'
 
 import app as app_module
@@ -149,7 +149,7 @@ class AuthenticationTests(unittest.TestCase):
 
     def test_login_wrong_credentials(self):
         """Un mauvais mot de passe renvoie 401 sans révéler si le compte existe."""
-        r = fresh_client().post('/api/login', json={'email': 'nonexistent@test.ci', 'password': 'wrongpassword1'})
+        r = fresh_client().post('/api/login', json={'first_name': 'Nobody', 'last_name': 'None', 'phone': '+22500000000', 'code': 'wrongpassword1'})
         self.assertEqual(r.status_code, 401)
         self.assertNotIn('inconnu', r.json().get('detail', '').lower())
         self.assertNotIn('existe', r.json().get('detail', '').lower())
@@ -161,7 +161,7 @@ class AuthenticatedAdminTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         c = fresh_client()
-        r = c.post('/api/login', json={'email': 'admin@test.ci', 'password': 'MotDePasse1234!'})
+        r = c.post('/api/login', json={'first_name': 'Admin', 'last_name': 'Test', 'phone': '+2250707995414', 'code': 'MotDePasse1234!'})
         if r.status_code == 200:
             cls.client = c
             cls.csrf = r.json().get('csrf', '')
@@ -217,9 +217,10 @@ class AuthenticatedAdminTests(unittest.TestCase):
         from fastapi.testclient import TestClient
         c2 = TestClient(app_module.app, cookies=dict(self.client.cookies))
         r = c2.post('/api/admin/users', json={
-            'name': 'Test User',
-            'email': 'newuser@test.ci',
-            'password': 'MotDePasse5678!',
+            'first_name': 'Test',
+            'last_name': 'User',
+            'phone': '+2250700000001',
+            'code': 'MotDePasse5678!',
             'role': 'reception',
         })
         self.assertEqual(r.status_code, 403)
@@ -230,12 +231,13 @@ class AuthenticatedAdminTests(unittest.TestCase):
         if not self.admin_ok:
             self.skipTest("Admin non connecté")
         r = self.client.post('/api/admin/users', headers=self._headers(), json={
-            'name': 'Test Reception',
-            'email': 'reception@test.ci',
-            'password': 'MotDePasse5678!',
+            'first_name': 'Test',
+            'last_name': 'Reception',
+            'phone': '+2250700000002',
+            'code': 'MotDePasse5678!',
             'role': 'reception',
         })
-        self.assertIn(r.status_code, (201, 409))  # 409 si email existe déjà
+        self.assertIn(r.status_code, (201, 409))  # 409 si téléphone existe déjà
 
 
 class SecurityHeadersTests(unittest.TestCase):
@@ -355,14 +357,15 @@ class InputValidationTests(unittest.TestCase):
     def test_invalid_role_rejected(self):
         """Un rôle invalide est rejeté lors de la création d'utilisateur."""
         c = fresh_client()
-        r = c.post('/api/login', json={'email': 'admin@test.ci', 'password': 'MotDePasse1234!'})
+        r = c.post('/api/login', json={'first_name': 'Admin', 'last_name': 'Test', 'phone': '+2250707995414', 'code': 'MotDePasse1234!'})
         if r.status_code != 200:
             self.skipTest("Admin non disponible")
         csrf = r.json().get('csrf', '')
         r = c.post('/api/admin/users', headers={'x-csrf-token': csrf}, json={
-            'name': 'Bad Role',
-            'email': 'badrole@test.ci',
-            'password': 'MotDePasse5678!',
+            'first_name': 'Bad',
+            'last_name': 'Role',
+            'phone': '+2250700000003',
+            'code': 'MotDePasse5678!',
             'role': 'superadmin',
         })
         self.assertEqual(r.status_code, 422)

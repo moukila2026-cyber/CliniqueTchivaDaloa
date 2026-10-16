@@ -12,7 +12,7 @@ Ouvrez **GUIDE-NEON-VERCEL.md** : il remplace les anciennes instructions de prox
 6. Configurez `COOKIE_SECURE=1`, `TZ=Africa/Abidjan` et `PUBLIC_URL` avec le domaine final. Redéployez après modification.
 7. Ouvrez **/gestion** et créez votre compte avec votre propre e-mail, mot de passe et la valeur privée **SETUP_KEY**. En mode Neon, aucun fichier `data/setup.key` n’est créé.
 
-**Ne partagez ni DATABASE_URL ni ENCRYPTION_KEY ni SETUP_KEY. Ne changez pas ENCRYPTION_KEY après les premières données.**
+**Ne partagez ni DATABASE_URL ni ENCRYPTION_KEY ni ADMIN_PASSWORD. Ne changez pas ENCRYPTION_KEY après les premières données.**
 
 ## Les informations à renseigner
 
