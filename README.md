@@ -16,8 +16,9 @@ Le dépôt inspecté `moukila2026-cyber/CliniqueTchivaDaloa` manquait de `static
 - Accueil, clinique, services, équipe, contact/accès et demande de rendez-vous.
 - Responsive, polices locales, pas de CDN publicitaire.
 - Logo centralisé dans **`static/logo.png`**, avec adaptation carré/horizontal.
-- Numéro WhatsApp, horaires et présentation modifiables depuis Paramètres.
-- Carte exacte configurable, recherche Google Maps externe ; le schéma initial est clairement indicatif.
+- Numéros (standard, urgences 24h/24, accueil), WhatsApp, horaires, présentation, coordonnées GPS, Plus Code et assurances conventionnées modifiables depuis Paramètres.
+- Bandeau d’urgence 24h/24, menu de choix d’appel, sélecteur de motif WhatsApp, fiches pratiques des cinq services et section assurances & mutuelles.
+- Carte Google Maps interactive réelle, centrée sur le point GPS exact 6.90645, -6.43381 (Tazibouo, en face du Collège La Paix, Plus Code WH48+HFJ Daloa) et bouton d’itinéraire direct. Aucun schéma de remplacement n’est affiché.
 - Métadonnées et JSON-LD `MedicalClinic`, sitemap/canoniques avec `PUBLIC_URL`.
 - Politique de confidentialité et mentions légales à compléter.
 
@@ -30,7 +31,7 @@ Le dépôt inspecté `moukila2026-cyber/CliniqueTchivaDaloa` manquait de `static
 - Consommables, seuils d’alerte et mouvements de stock, sans quantité négative.
 - Journal d’activité et guide de prise en main de 15 minutes.
 
-Aucun numéro, horaire, service médical, médecin, diplôme ou témoignage n’a été inventé. Le visuel d’accueil est une illustration IA, pas l’équipe réelle. Le PNG fourni est toujours un symbole provisoire à remplacer par le logo officiel.
+Aucun numéro, horaire, service médical, médecin, diplôme ou témoignage n’a été inventé. Les visuels (accueil, façade, urgences, cinq services, accueil assurances) sont des illustrations IA, pas l’équipe ni les locaux réels. Le PNG fourni est toujours un symbole provisoire à remplacer par le logo officiel.
 
 ## Configuration PostgreSQL/Neon
 

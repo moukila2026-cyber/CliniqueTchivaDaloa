@@ -48,7 +48,14 @@
     ".map",
     ".booking-aside",
     ".footer-grid > div",
-    ".prose > *"
+    ".prose > *",
+    ".service-detail",
+    ".service-tile",
+    ".insurance-copy",
+    ".insurance-panel",
+    ".emergency-grid",
+    ".clinic-photo",
+    ".chip"
   ].join(",");
 
   var canReveal = !reduce && "IntersectionObserver" in window;
@@ -93,7 +100,7 @@
   /* 4. Reflet qui suit le pointeur sur les cartes */
   if (fine && !reduce) {
     document.addEventListener("pointermove", function (e) {
-      var card = e.target && e.target.closest ? e.target.closest(".card") : null;
+      var card = e.target && e.target.closest ? e.target.closest(".card, .service-tile, .insurance-panel, .call-group") : null;
       if (!card) return;
       var r = card.getBoundingClientRect();
       card.style.setProperty("--mx", (e.clientX - r.left) + "px");
@@ -103,7 +110,7 @@
 
   /* 5. Effet magnétique léger sur les boutons principaux (souris uniquement) */
   if (fine && !reduce) {
-    var MAGNET = ".hero-actions .btn, .cta .btn";
+    var MAGNET = ".hero-actions .btn, .cta .btn, .map-actions .btn, .service-actions .btn";
     document.addEventListener("pointermove", function (e) {
       var btn = e.target && e.target.closest ? e.target.closest(MAGNET) : null;
       if (!btn) return;

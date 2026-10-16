@@ -754,6 +754,63 @@ table tbody tr:hover {
   box-shadow: 0 6px 14px -8px rgba(20, 62, 53, 0.5);
 }
 
+/* ---------- 16bis. Fiches services, tuiles et panneau assurances --------- */
+.service-detail,
+.service-tile,
+.insurance-panel,
+.call-group {
+  --mx: 50%;
+  --my: 50%;
+}
+.service-detail:after,
+.service-tile:after,
+.insurance-panel:after,
+.call-group:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(240px circle at var(--mx) var(--my), rgba(47, 176, 138, 0.12), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.45s var(--v-ease);
+  pointer-events: none;
+}
+.service-detail:hover:after,
+.service-tile:hover:after,
+.insurance-panel:hover:after,
+.call-group:hover:after {
+  opacity: 1;
+}
+.service-detail .service-body > *,
+.service-tile-body,
+.insurance-panel > *,
+.call-group > * {
+  position: relative;
+  z-index: 1;
+}
+.service-tile-icon,
+.insurance-panel .chip {
+  transition: transform 0.5s var(--v-ease-spring), background 0.4s, color 0.4s;
+}
+.service-tile:hover .service-tile-icon {
+  transform: rotate(-8deg) scale(1.08);
+  background: linear-gradient(135deg, var(--v-green-1), var(--v-green-3));
+  color: #fff;
+}
+.emergency-call .ico {
+  animation: v-pulse-soft 2.4s var(--v-ease) infinite;
+}
+@keyframes v-pulse-soft {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+.emergency-photo img {
+  transition: transform 0.9s var(--v-ease);
+}
+.emergency-photo:hover img {
+  transform: scale(1.04);
+}
+
 /* ---------- 17. Révélation au défilement (activée par vivant.js) -------- */
 .v-reveal {
   opacity: 0;

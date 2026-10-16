@@ -44,19 +44,26 @@ def enc(x): return CIPHER.encrypt(str(x).encode()).decode()
 def dec(x): return CIPHER.decrypt(x.encode()).decode() if x else ''
 def digest(x): return hashlib.sha256(x.encode()).hexdigest()
 DEFAULT={
- 'name':'Clinique Tchiva','address':'Tazibouo, en face du Collège La Paix','city':'Daloa','phone':'+225 27 24 37 50 80','whatsapp':'+225 07 88 97 55 16','email':'','hours':'Accueil et consultations disponibles du lundi au samedi et urgences 24h/24.','about':'Au cœur de Daloa, la Clinique Tchiva vous accueille à Tazibouo, en face du Collège La Paix. Une équipe dévouée pour votre santé et celle de vos proches. Contactez notre accueil pour vous renseigner et organiser votre venue.',
+ 'name':'Clinique Tchiva','address':'Tazibouo, en face du Collège La Paix','city':'Daloa','phone':'+225 27 24 37 50 80','emergency_phone':'+225 07 88 97 55 16','reception_phones':['+225 07 07 99 54 14','+225 05 05 81 94 44'],'whatsapp':'+225 07 88 97 55 16','email':'','hours':'Accueil et consultations disponibles du lundi au samedi et urgences 24h/24.','about':'Au cœur de Daloa, la Clinique Tchiva vous accueille à Tazibouo, en face du Collège La Paix. Une équipe dévouée pour votre santé et celle de vos proches. Contactez notre accueil pour vous renseigner et organiser votre venue.',
  'specialties':[
-   {'name':'Médecine générale','description':'Consultations médicales générales, bilans de santé, suivi des pathologies courantes pour adultes et enfants.','published':True},
-   {'name':'Ophtalmologie','description':'Dépistage, examens visuels, soins oculaires et suivi des affections de la vision.','published':True},
-   {'name':'ORL','description':'Oto-rhino-laryngologie : consultations, diagnostics et traitements des affections des oreilles, du nez et de la gorge.','published':True},
-   {'name':'Laboratoire','description':'Prélèvements, analyses biologiques et examens de laboratoire sur place.','published':True},
-   {'name':'Chirurgie','description':'Consultations chirurgicales, actes spécialisés et interventions adaptées.','published':True}
+   {'name':'Médecine générale','description':'Consultations adultes et pédiatriques, bilans de santé et suivi des pathologies chroniques : hypertension, diabète, paludisme.','published':True},
+   {'name':'Ophtalmologie','description':'Examens de réfraction et acuité visuelle, dépistage de la cataracte et du glaucome, bilans ophtalmologiques complets.','published':True},
+   {'name':'ORL','description':'Consultations et diagnostics des affections des oreilles, du nez et de la gorge, audiométrie et soins spécialisés.','published':True},
+   {'name':'Laboratoire','description':'Prélèvements sur place, analyses biochimiques, hématologie (NFS), bilans à jeun et sérologies.','published':True},
+   {'name':'Chirurgie','description':'Consultations chirurgicales spécialisées, petites chirurgies, pansements et suivi post-opératoire.','published':True}
  ],
- 'team':[], 'schedules':[], 'map_url':'https://www.google.com/maps?q=6.90645,-6.43381&output=embed', 'privacy_contact':'', 'retention_days':180
+ 'team':[], 'schedules':[], 'map_url':'https://www.google.com/maps?q=6.90645,-6.43381&output=embed','plus_code':'WH48+HFJ Daloa','latitude':'6.90645','longitude':'-6.43381',
+ 'insurances':['CNAM','ASCOMA','SANLAM','AXA','GMC','MUGEF-CI','Autres mutuelles locales'],
+ 'privacy_contact':'', 'retention_days':180
 }
-
+# Fusion défensive : une base existante ne contient pas forcément les nouveaux réglages.
 def settings():
-    with db() as c: return json.loads(c.execute('SELECT data FROM settings WHERE id=1').fetchone()[0])
+    with db() as c:
+        data=json.loads(c.execute('SELECT data FROM settings WHERE id=1').fetchone()[0])
+    for k,v in DEFAULT.items():
+        if k not in data: data[k]=json.loads(json.dumps(v)) if isinstance(v,(list,dict)) else v
+    return data
+
 def log(c,user,action,entity): c.execute('INSERT INTO audit(user_id,action,entity,created_at) VALUES(?,?,?,?)',(user['id'],action,str(entity),now()))
 def limit(request,key,max_count,seconds):
     # Sur Vercel, cet en-tête est fourni/écrasé par la plateforme.
@@ -463,6 +470,12 @@ class Settings(BaseModel):
     team:list[Practitioner]=Field(max_length=50)
     schedules:list[Schedule]=Field(max_length=100)
     map_url:str=Field(default='',max_length=600)
+    plus_code:str=Field(default='',max_length=60)
+    latitude:str=Field(default='',max_length=20)
+    longitude:str=Field(default='',max_length=20)
+    emergency_phone:str=Field(default='',max_length=30)
+    reception_phones:list[str]=Field(default_factory=list,max_length=6)
+    insurances:list[str]=Field(default_factory=list,max_length=20)
     privacy_contact:str=Field(default='',max_length=200)
     retention_days:int=Field(default=180,ge=30,le=3650)
 @app.put('/api/admin/settings')
@@ -470,6 +483,16 @@ def save_settings(p:Settings,user=Depends(auth)):
     allowed(user)
     if p.phone:valid_phone(p.phone)
     if p.whatsapp:valid_phone(p.whatsapp)
+    if p.emergency_phone:valid_phone(p.emergency_phone)
+    p.reception_phones=[valid_phone(x) for x in p.reception_phones if x.strip()]
+    p.insurances=[text(x,60) for x in p.insurances if x.strip()]
+    for field_name in ('latitude','longitude'):
+        value=getattr(p,field_name).strip()
+        if value:
+            try:float(value)
+            except ValueError:raise HTTPException(422,'Coordonnée GPS invalide (exemple : 6.90645).')
+            if not re.fullmatch(r'-?\d{1,2}\.\d{1,8}',value):raise HTTPException(422,'Coordonnée GPS invalide (exemple : 6.90645).')
+            setattr(p,field_name,value)
     if p.email:email_valid(p.email)
     if p.map_url and not (p.map_url.startswith('https://www.google.com/maps/embed?') or p.map_url.startswith('https://www.google.com/maps?')):raise HTTPException(422,'Utilisez une URL d’intégration https://www.google.com/maps?...')
     names=[x.name for x in p.team if x.published]
@@ -549,7 +572,15 @@ def frontend(path:str=''):
     titles={'':'Clinique Tchiva à Daloa · Votre santé, notre priorité','services':'Services et spécialités · Clinique Tchiva Daloa','equipe':'Équipe médicale · Clinique Tchiva Daloa','contact':'Contact et accès à Tazibouo · Clinique Tchiva','rendez-vous':'Demande de rendez-vous · Clinique Tchiva Daloa','clinique':'Notre clinique à Daloa · Clinique Tchiva'}
     html=html.replace('__TITLE__',escape(titles.get(path,'Clinique Tchiva · Espace sécurisé')))
     schema={'@context':'https://schema.org','@type':'MedicalClinic','name':s['name'],'address':{'@type':'PostalAddress','streetAddress':s['address'],'addressLocality':s['city'],'addressCountry':'CI'}}
-    if s['phone']:schema['telephone']=s['phone']
+    phones=[x for x in (s['phone'],s.get('emergency_phone','')) if x]
+    if phones:schema['telephone']=phones[0] if len(phones)==1 else phones
+    try:
+        lat=float(str(s.get('latitude','')).strip());lng=float(str(s.get('longitude','')).strip())
+        schema['geo']={'@type':'GeoCoordinates','latitude':lat,'longitude':lng}
+        schema['hasMap']=f'https://www.google.com/maps?q={lat},{lng}'
+    except ValueError:pass
+    if s.get('plus_code'):schema['plusCode']=s['plus_code']
+    if s.get('specialties'):schema['medicalSpecialty']=[x['name'] for x in s['specialties'] if x.get('published')]
     if BASE_URL:
         schema['url']=BASE_URL
         schema['logo']=BASE_URL+'/static/logo.png'
