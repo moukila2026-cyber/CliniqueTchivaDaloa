@@ -196,7 +196,7 @@ Une clé différente n’anonymise pas une copie de production : ne clonez pas d
 4. Créez votre propre compte administrateur : nom, e-mail, mot de passe d’au moins 12 caractères, et valeur de **`SETUP_KEY`**.
 5. Une fois le premier compte créé, l’installation initiale est bloquée. Il n’y a pas de mot de passe partagé fourni.
 6. Complétez les coordonnées, horaires, services et médecins vérifiés dans Paramètres.
-7. Créez les comptes du personnel selon leurs rôles.
+7. Créez les comptes du personnel depuis /gestion → Paramètres → Comptes du personnel → Créer un compte (nom, prénom, téléphone, code de 12 caractères minimum). Transmettez le code par un canal distinct.
 
 Sur Neon/Vercel, **aucun fichier `data/setup.key` n’est à chercher** : votre code d’installation est la variable privée `SETUP_KEY`.
 
@@ -236,7 +236,7 @@ Il s’agit d’une validation PostgreSQL locale, **pas d’une connexion à vot
 ```bash
 # Avec les variables privées déjà configurées sur le poste de maintenance :
 python manage.py backup --output /chemin-prive/tchiva-sauvegarde.fernet
-python manage.py reset-password --email utilisateur@votre-domaine.ci
+python manage.py reset-password --phone '+2250707995414'
 ```
 
 La réinitialisation ferme toutes les sessions du compte. Elle nécessite un accès privé aux mêmes variables de base/chiffrement. N’exposez jamais ces outils comme des routes web.

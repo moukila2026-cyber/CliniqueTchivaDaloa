@@ -41,7 +41,7 @@ Ouvrez votre projet Vercel → **Settings → Environment Variables**. Ajoutez c
 | ADMIN_EMAIL | L’adresse e-mail que vous utiliserez pour vous connecter |
 | ADMIN_PASSWORD | Votre mot de passe personnel, d’au moins 12 caractères |
 
-Les prénoms peuvent contenir plusieurs mots. Le nom affiché réunit prénoms et nom (100 caractères au total au maximum). Le mot de passe accepte au maximum 72 octets UTF-8 : les lettres accentuées et émojis peuvent occuper plusieurs octets. Un mot de passe long et unique conservé dans un gestionnaire de mots de passe est recommandé.
+Les prénoms peuvent contenir plusieurs mots. Le nom affiché réunit prénoms et nom (100 caractères au total au maximum). Le code personnel accepte au maximum 72 octets UTF-8 : les lettres accentuées et émojis peuvent occuper plusieurs octets. Un code long et unique conservé dans un gestionnaire de mots de passe est recommandé.
 
 **Ne saisissez pas les exemples du guide comme identifiants réels.** Ne mettez pas de guillemets autour des valeurs. Enregistrez chaque variable. Gardez ces informations hors du dépôt GitHub, des captures d’écran et des logs.
 
@@ -61,14 +61,14 @@ N’ajoutez pas TZ dans Vercel : ce nom y est réservé et UTC correspond déjà
 4. Ouvrez https://clinique-tchiva-daloa.vercel.app/gestion
 5. Connectez-vous avec **votre e-mail et votre mot de passe**. Aucun code supplémentaire n’est demandé.
 
-Le premier compte est créé automatiquement, dans Neon, au premier accès à la base après le redéploiement. Son mot de passe est enregistré sous forme de hash bcrypt, et non en clair en base. Les nom et prénoms sont fournis une seule fois dans la configuration privée, pas à chaque connexion.
+Le premier compte est créé automatiquement, dans Neon, au premier accès à la base après le redéploiement. Son code personnel est enregistré sous forme de hash bcrypt, et non en clair en base. Les nom, prénom et téléphone sont fournis une seule fois dans la configuration privée, pas à chaque connexion.
 
-Si un compte existe déjà, la mise à jour le conserve tel quel : les quatre variables ne remplacent pas ses informations ou son mot de passe. Utilisez alors ses identifiants existants. Un marqueur en base ferme définitivement cette initialisation après le premier compte ; supprimer manuellement un compte ne réouvre pas la création initiale.
+Si un compte existe déjà, la mise à jour le conserve tel quel : les quatre variables ne remplacent pas ses informations ou son code. Utilisez alors ses identifiants existants. Un marqueur en base ferme définitivement cette initialisation après le premier compte ; supprimer manuellement un compte ne réouvre pas la création initiale.
 
 ## 4. Nettoyer après la première connexion réussie
 
 - Supprimez **SETUP_KEY** des variables Vercel : elle n’est plus utilisée par la nouvelle version.
-- Supprimez **ADMIN_PASSWORD** des variables Vercel après avoir confirmé que votre compte fonctionne. Vous pouvez aussi retirer ADMIN_NOM, ADMIN_PRENOM et ADMIN_EMAIL.
+- Supprimez **ADMIN_PASSWORD** des variables Vercel après avoir confirmé que votre compte fonctionne. Vous pouvez aussi retirer ADMIN_NOM, ADMIN_PRENOM et ADMIN_TEL.
 - Redéployez le dernier commit. Le compte et son mot de passe restent en base ; les variables ne sont pas nécessaires aux connexions suivantes.
 - Ne supprimez ni DATABASE_URL ni ENCRYPTION_KEY. Changer ENCRYPTION_KEY empêcherait de déchiffrer les données existantes.
 
