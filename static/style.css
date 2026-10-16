@@ -2707,3 +2707,21 @@ tr:last-child td {
 @media(max-width:1100px){.logo-wide .sidebar .brand-mark{max-width:155px;}}
 @media(max-width:700px){.logo-wide .header-inner .brand-mark{max-width:166px;height:39px;} .about-logo{height:150px;} .logo-wide .footer .brand-mark{max-width:196px;}}
 @media(max-width:370px){.logo-wide .header-inner .brand-mark{max-width:142px;height:35px;}}
+
+.contact-numbers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.contact-numbers p {
+  margin: 0;
+  font-size: 13px;
+}
+.muted-link {
+  color: var(--muted);
+  text-decoration: none;
+}
+.muted-link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
