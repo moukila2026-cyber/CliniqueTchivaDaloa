@@ -388,11 +388,11 @@ class ErrorHandlingTests(unittest.TestCase):
 
 
 class Shopin30LinkTests(unittest.TestCase):
-    """Vérifie que le lien Shopin30 est correctement implémenté."""
+    """Vérifie que le crédit discret Shopin30 est correctement implémenté."""
 
     def test_shopin30_in_app_js(self):
         content = (ROOT / 'app.js').read_text()
-        self.assertIn('x-footer-shopin', content)
+        self.assertIn('Conçu par Shopin30', content)
         self.assertIn('wa.me/2250501303343', content)
         self.assertIn('noopener noreferrer', content)
         self.assertIn('target="_blank"', content)
@@ -409,21 +409,31 @@ class Shopin30LinkTests(unittest.TestCase):
 
     def test_shopin30_css_present(self):
         content = (ROOT / 'static' / 'vivant.css').read_text()
-        self.assertIn('.x-footer-shopin', content)
-        self.assertIn('.x-footer-shopin-btn', content)
+        self.assertIn('.footer-credit', content)
+        self.assertNotIn('.x-footer-shopin', content)
 
     def test_shopin30_accessibility(self):
         content = (ROOT / 'app.js').read_text()
-        self.assertIn('aria-label', content)
-        self.assertIn('role="complementary"', content)
+        self.assertIn('aria-label="Concepteur du site : Shopin30', content)
 
     def test_shopin30_independence_note(self):
         content = (ROOT / 'app.js').read_text()
-        self.assertIn('indépendant', content.lower())
+        self.assertIn('Contact professionnel indépendant de la clinique', content)
 
-    def test_shopin30_phone_displayed(self):
+    def test_shopin30_phone_not_displayed(self):
+        """Le numéro de téléphone de Shopin30 ne doit plus être affiché."""
         content = (ROOT / 'app.js').read_text()
-        self.assertIn('+225 05 01 30 33 43', content)
+        self.assertNotIn('+225 05 01 30 33 43', content)
+
+    def test_shopin30_block_removed(self):
+        """L'encart promotionnel Shopin30 ne doit plus exister."""
+        content = (ROOT / 'app.js').read_text()
+        self.assertNotIn('x-footer-shopin', content)
+        self.assertNotIn('Un site web pour votre entreprise', content)
+
+    def test_no_ai_visuals_mention_in_footer(self):
+        content = (ROOT / 'app.js').read_text()
+        self.assertNotIn('Visuels : illustrations générées par IA', content)
 
 
 if __name__ == '__main__':
