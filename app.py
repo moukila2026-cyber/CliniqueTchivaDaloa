@@ -120,7 +120,7 @@ async def security(request,call_next):
 def auth(request:Request):
     token=request.cookies.get('tchiva_session','')
     with db() as c:
-        row=c.execute('SELECT u.id,u.name,u.email,u.role,s.csrf FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1',(digest(token),time.time())).fetchone()
+        row=c.execute('SELECT u.id,u.name,u.first_name,u.last_name,u.phone,u.email,u.role,s.csrf FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1',(digest(token),time.time())).fetchone()
     if not row: raise HTTPException(401,'Veuillez vous connecter.')
     user=dict(row)
     if request.method not in ('GET','HEAD') and not secrets.compare_digest(request.headers.get('x-csrf-token',''),user['csrf']): raise HTTPException(403,'Session de sécurité invalide. Rechargez la page.')
@@ -145,11 +145,23 @@ def valid_slot(s):
     if s and not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',s): raise HTTPException(422,'Heure invalide.')
 
 class Login(BaseModel):
-    email:str=Field(min_length=3,max_length=150)
-    password:str=Field(min_length=1,max_length=72)
+    first_name:str=Field(min_length=1,max_length=100)
+    last_name:str=Field(min_length=1,max_length=100)
+    phone:str=Field(min_length=8,max_length=30)
+    code:str=Field(min_length=12,max_length=72)
+
+def normalize_phone(s):
+    """Normalise un numéro : 07 XX XX XX XX → +22507XXXXXXXX.
+    Tolère les espaces, points, tirets et parenthèses."""
+    s=re.sub(r'[\s.\-()]+','',s)
+    if not s:return ''
+    if s.startswith('00'):s='+'+s[2:]
+    elif s.startswith('0') and not s.startswith('+'):s='+225'+s
+    elif not s.startswith('+'):s='+'+s
+    return s
 
 def password_hash(password):
-    if len(password)<12 or len(password.encode())>72: raise HTTPException(422,'Le mot de passe doit contenir au moins 12 caractères et au plus 72 octets.')
+    if len(password)<12 or len(password.encode())>72: raise HTTPException(422,'Le code personnel doit contenir au moins 12 caractères et au plus 72 octets.')
     return bcrypt.hashpw(password.encode(),bcrypt.gensalt())
 def email_valid(email):
     email=email.strip().lower()
@@ -177,18 +189,17 @@ def ensure_initial_admin():
                 else:
                     family=os.environ.get('ADMIN_NOM','').strip()
                     given=os.environ.get('ADMIN_PRENOM','').strip()
-                    email=os.environ.get('ADMIN_EMAIL','').strip()
-                    password=os.environ.get('ADMIN_PASSWORD','')
-                    if all((family,given,email,password)):
+                    phone=normalize_phone(os.environ.get('ADMIN_TEL','').strip())
+                    code=os.environ.get('ADMIN_PASSWORD','')
+                    if all((family,given,phone,code)):
                         try:
                             fullname=(given+' '+family).strip()
-                            if len(fullname)>100 or len(email)>150:raise HTTPException(422,'Configuration initiale invalide.')
-                            email=email_valid(email)
-                            hashed=password_hash(password)
+                            if len(fullname)>100 or len(phone)>30:raise HTTPException(422,'Configuration initiale invalide.')
+                            hashed=password_hash(code)
                         except HTTPException:
-                            logging.getLogger('tchiva').warning('Compte initial non créé : vérifier ADMIN_NOM, ADMIN_PRENOM, ADMIN_EMAIL et ADMIN_PASSWORD, sans afficher leurs valeurs.')
+                            logging.getLogger('tchiva').warning('Compte initial non créé : vérifier ADMIN_NOM, ADMIN_PRENOM, ADMIN_TEL et ADMIN_PASSWORD, sans afficher leurs valeurs.')
                         else:
-                            uid=c.insert_id('INSERT INTO users(name,email,password,role) VALUES(?,?,?,?)',(fullname,email,hashed,'admin'))
+                            uid=c.insert_id('INSERT INTO users(name,first_name,last_name,phone,password,role) VALUES(?,?,?,?,?,?)',(fullname,given,family,phone,hashed,'admin'))
                             c.execute('INSERT INTO audit(user_id,action,entity,created_at) VALUES(?,?,?,?)',(uid,'Création initiale privée du compte administrateur',str(uid),now()))
                             c.execute('INSERT INTO bootstrap_state(id,initialized_at) VALUES(1,?)',(now(),))
                     # Sans configuration complète, rester fermé, jamais d'inscription publique.
@@ -215,15 +226,26 @@ def setup_disabled():
 @app.post('/api/login')
 def login(payload:Login,request:Request):
     limit(request,'login',8,900)
-    with db() as c: u=c.execute('SELECT * FROM users WHERE email=? AND active=1',(payload.email.lower().strip(),)).fetchone()
+    phone_norm=normalize_phone(payload.phone)
+    fn=payload.first_name.strip().lower()
+    ln=payload.last_name.strip().lower()
+    with db() as c:
+        # Recherche par téléphone normalisé + nom/prénom (casse et accents tolérés).
+        u=None
+        rows=c.execute('SELECT * FROM users WHERE phone=? AND active=1',(phone_norm,)).fetchall()
+        for row in rows:
+            r_first=(row['first_name'] or '').strip().lower()
+            r_last=(row['last_name'] or '').strip().lower()
+            if r_first==fn and r_last==ln:
+                u=row;break
     # Constant-cost password check even for unknown account.
     h=u['password'] if u else b'$2b$12$BkCpQdfgNUB2PSdvT2DppeWDFY9xJkITM6IqmPQGWioeSHHfs2cNi'
-    if not bcrypt.checkpw(payload.password.encode()[:72],h) or not u: raise HTTPException(401,'Identifiants incorrects.')
+    if not bcrypt.checkpw(payload.code.encode()[:72],h) or not u: raise HTTPException(401,'Identifiants incorrects.')
     token=secrets.token_urlsafe(32); csrf=secrets.token_urlsafe(24)
     with db() as c:
         c.execute('DELETE FROM sessions WHERE expires<?',(time.time(),))
         c.execute('INSERT INTO sessions VALUES(?,?,?,?)',(digest(token),u['id'],csrf,time.time()+8*3600)); log(c,u,'Connexion','session')
-    response=JSONResponse({'id':u['id'],'name':u['name'],'email':u['email'],'role':u['role'],'csrf':csrf})
+    response=JSONResponse({'id':u['id'],'name':u['name'],'first_name':dict(u).get('first_name','') or '','last_name':dict(u).get('last_name','') or '','phone':dict(u).get('phone','') or '','email':dict(u).get('email','') or '','role':u['role'],'csrf':csrf})
     response.set_cookie('tchiva_session',token,httponly=True,secure=SECURE,samesite='lax',max_age=8*3600,path='/')
     return response
 
@@ -455,7 +477,7 @@ def summary(user=Depends(auth)):
             result['income']=c.execute("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE kind='income' AND substr(day,1,7)=?",(month,)).fetchone()[0]
             result['expense']=c.execute("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE kind='expense' AND substr(day,1,7)=?",(month,)).fetchone()[0]
         result['low_stock']=c.execute('SELECT COUNT(*) FROM inventory WHERE quantity<=threshold').fetchone()[0]
-        if user['role']=='admin':result['audit']=[dict(r) for r in c.execute('SELECT a.*,u.name FROM audit a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 8')]
+        if user['role']=='admin':result['audit']=[dict(r) for r in c.execute('SELECT a.*,u.name,u.first_name,u.last_name FROM audit a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 8')]
     return result
 
 @app.get('/api/admin/settings')
@@ -522,23 +544,30 @@ def save_settings(p:Settings,user=Depends(auth)):
     return {'ok':True}
 
 class UserCreate(BaseModel):
-    name:str=Field(min_length=2,max_length=100)
-    email:str=Field(max_length=150)
-    password:str=Field(max_length=72)
+    first_name:str=Field(min_length=1,max_length=100)
+    last_name:str=Field(min_length=1,max_length=100)
+    phone:str=Field(min_length=8,max_length=30)
+    code:str=Field(max_length=72)
     role:str
 @app.get('/api/admin/users')
 def users(user=Depends(auth)):
     allowed(user)
-    with db() as c:return [dict(r) for r in c.execute('SELECT id,name,email,role,active FROM users ORDER BY id')]
+    with db() as c:return [dict(r) for r in c.execute('SELECT id,name,first_name,last_name,phone,email,role,active FROM users ORDER BY id')]
 @app.post('/api/admin/users',status_code=201)
 def create_user(p:UserCreate,user=Depends(auth)):
     allowed(user)
     if p.role not in ['admin','reception','medical','accounting']:raise HTTPException(422,'Rôle invalide.')
-    h=password_hash(p.password);email=email_valid(p.email)
+    if len(p.code)<12:raise HTTPException(422,'Le code personnel doit contenir au moins 12 caractères.')
+    h=password_hash(p.code);phone_norm=normalize_phone(p.phone)
+    if not phone_norm:raise HTTPException(422,'Numéro de téléphone invalide.')
+    fullname=(p.first_name.strip()+' '+p.last_name.strip()).strip()
     try:
         with db() as c:
-            id=c.insert_id('INSERT INTO users(name,email,password,role) VALUES(?,?,?,?)',(p.name,email,h,p.role));log(c,user,'Création compte',id)
-    except INTEGRITY_ERRORS:raise HTTPException(409,'Cet e-mail existe déjà.')
+            # Vérifier qu'aucun compte actif n'a déjà ce téléphone.
+            existing=c.execute('SELECT id FROM users WHERE phone=? AND active=1',(phone_norm,)).fetchone()
+            if existing:raise HTTPException(409,'Un compte actif existe déjà avec ce numéro de téléphone.')
+            id=c.insert_id('INSERT INTO users(name,first_name,last_name,phone,password,role) VALUES(?,?,?,?,?,?)',(fullname,p.first_name.strip(),p.last_name.strip(),phone_norm,h,p.role));log(c,user,'Création compte',id)
+    except INTEGRITY_ERRORS:raise HTTPException(409,'Ce numéro de téléphone existe déjà.')
     return {'id':id}
 @app.patch('/api/admin/users/{id}')
 def disable_user(id:int,user=Depends(auth)):
@@ -556,9 +585,34 @@ class PasswordChange(BaseModel):
 def change_password(p:PasswordChange,user=Depends(auth)):
     with db() as c:
         h=c.execute('SELECT password FROM users WHERE id=?',(user['id'],)).fetchone()[0]
-        if not bcrypt.checkpw(p.current.encode()[:72],h):raise HTTPException(422,'Mot de passe actuel incorrect.')
-        c.execute('UPDATE users SET password=? WHERE id=?',(password_hash(p.password),user['id']));c.execute('DELETE FROM sessions WHERE user_id=?',(user['id'],));log(c,user,'Changement de mot de passe',user['id'])
+        if not bcrypt.checkpw(p.current.encode()[:72],h):raise HTTPException(422,'Code actuel incorrect.')
+        c.execute('UPDATE users SET password=? WHERE id=?',(password_hash(p.password),user['id']));c.execute('DELETE FROM sessions WHERE user_id=?',(user['id'],));log(c,user,'Changement de code personnel',user['id'])
     return {'ok':True}
+
+class ResetCode(BaseModel):
+    code:str=Field(min_length=12,max_length=72)
+@app.post('/api/admin/users/{id}/reset-code')
+def reset_user_code(id:int,p:ResetCode,user=Depends(auth)):
+    """L'administrateur remet le code personnel d'un membre."""
+    allowed(user)
+    if id==user['id']:raise HTTPException(422,'Utilisez le changement de code depuis votre propre compte.')
+    with db() as c:
+        r=c.execute('SELECT id,name,active FROM users WHERE id=?',(id,)).fetchone()
+        if not r:raise HTTPException(404,'Compte introuvable.')
+        if not r['active']:raise HTTPException(422,'Ce compte est désactivé.')
+        c.execute('UPDATE users SET password=? WHERE id=?',(password_hash(p.code),id))
+        c.execute('DELETE FROM sessions WHERE user_id=?',(id,))
+        log(c,user,'Remise du code personnel',id)
+    return {'ok':True}
+
+@app.get('/api/admin/audit')
+def full_audit(user=Depends(auth)):
+    """Journal d'activité complet, réservé à l'administrateur (direction)."""
+    allowed(user)
+    with db() as c:
+        rows=[dict(r) for r in c.execute('SELECT a.id,a.user_id,a.action,a.entity,a.created_at,u.name,u.first_name,u.last_name FROM audit a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 200')]
+        log(c,user,'Consultation journal d\'activité','audit')
+    return rows
 
 @app.get('/api/admin/report.csv')
 def report(start:str,end:str,user=Depends(auth)):

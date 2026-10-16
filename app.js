@@ -955,7 +955,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 function loginPage() {
-  return `<div class="login-page"><aside class="login-brand">${brand()}<div><div class="eyebrow" style="color:#cedecb">ESPACE RÉSERVÉ AU PERSONNEL</div><h1>Le soin commence<br>par une bonne<br>organisation.</h1><p>Rendez-vous, consultations et gestion de la clinique. Un espace unique pour votre équipe.</p></div><small>${icon("shield")} Accès protégé · Comptes individuels · Traçabilité</small></aside><main class="login-content" id="main"><div class="login-form"><a class="login-return" href="/" data-link>← Retour au site de la clinique</a><h2>Heureux de vous retrouver.</h2><p>Connectez-vous avec votre e-mail et votre mot de passe.</p><form id="login-form">${errorBox}${field("Adresse e-mail", "email", "email", "", 'required autocomplete="username"')}${field("Mot de passe", "password", "password", "", 'required autocomplete="current-password"')}<button class="btn" type="submit">Se connecter ${icon("arrow")}</button></form>${needsSetup ? `<div class="notice">${icon("lock")}<div>Aucun compte n’est encore activé. Le propriétaire du projet doit configurer <code>ADMIN_NOM</code>, <code>ADMIN_PRENOM</code>, <code>ADMIN_EMAIL</code> et <code>ADMIN_PASSWORD</code> dans les paramètres privés Vercel, puis redéployer. Aucun code supplémentaire n’est demandé ici et aucune inscription administrateur n’est ouverte au public.</div></div>` : `<p class="legal-note">Accès réservé au personnel autorisé. Pour obtenir un compte ou réinitialiser un accès, contactez l’administrateur de la clinique.</p>`}<p class="legal-note">Ne saisissez des données réelles de patients qu’après validation de l’hébergement et de la protection des données.</p></div></main></div>`;
+  return `<div class="login-page"><aside class="login-brand">${brand()}<div><div class="eyebrow" style="color:#cedecb">ESPACE RÉSERVÉ AU PERSONNEL</div><h1>Le soin commence<br>par une bonne<br>organisation.</h1><p>Rendez-vous, consultations et gestion de la clinique. Un espace unique pour votre équipe.</p></div><small>${icon("shield")} Accès protégé · Comptes individuels · Traçabilité</small></aside><main class="login-content" id="main"><div class="login-form"><a class="login-return" href="/" data-link>← Retour au site de la clinique</a><h2>Heureux de vous retrouver.</h2><p>Connectez-vous avec votre nom, prénom, téléphone et code personnel.</p><form id="login-form">${errorBox}${field("Nom", "last_name", "text", "", 'required autocomplete="family-name"')}${field("Prénom", "first_name", "text", "", 'required autocomplete="given-name"')}${field("Téléphone", "phone", "tel", "", 'required autocomplete="tel" placeholder="07 XX XX XX XX"')}${field("Code personnel", "code", "password", "", 'required autocomplete="current-password"')}<button class="btn" type="submit">Se connecter ${icon("arrow")}</button></form>${needsSetup ? `<div class="notice">${icon("lock")}<div>Aucun compte n’est encore activé. Le propriétaire du projet doit configurer <code>ADMIN_NOM</code>, <code>ADMIN_PRENOM</code>, <code>ADMIN_TEL</code> et <code>ADMIN_PASSWORD</code> dans les paramètres privés Vercel, puis redéployer. Aucun code supplémentaire n’est demandé ici et aucune inscription administrateur n’est ouverte au public.</div></div>` : `<p class="legal-note">Accès réservé au personnel autorisé. Pour obtenir un compte ou réinitialiser un accès, contactez l’administrateur de la clinique.</p>`}<p class="legal-note">Ne saisissez des données réelles de patients qu’après validation de l’hébergement et de la protection des données.</p></div></main></div>`;
 }
 const adminItems = () => [
   ["/gestion", "grid", "Vue d’ensemble", true],
@@ -971,6 +971,7 @@ const adminItems = () => [
   ["/gestion/stocks", "box", "Stocks & consommables", true],
   ["/gestion/rapports", "chart", "Rapports", can("accounting")],
   ["/gestion/parametres", "settings", "Paramètres", can()],
+  ["/gestion/journal", "file", "Journal d'activité", me && me.role === "admin"],
   ["/gestion/formation", "help", "Guide de prise en main", true],
 ];
 function adminShell() {
@@ -982,7 +983,7 @@ function adminShell() {
     )
     .join(
       "",
-    )}</nav><div class="sidebar-bottom"><a href="/" data-link>${icon("external")} Voir le site public</a><div class="user-mini"><div class="avatar">${esc(initials(me.name))}</div><div><strong>${esc(me.name)}</strong><span>${esc(roles[me.role])}</span></div></div></div></aside><div class="admin-main"><header class="admin-top"><button class="icon-btn mobile-admin-toggle" id="admin-menu" aria-label="Ouvrir le menu">${icon("menu")}</button><span>Clinique Tchiva <span class="muted">/ Espace de gestion</span></span><div class="admin-top-actions"><span class="tag">${icon("shield")} Espace protégé</span><button class="icon-btn" id="password-button" title="Changer mon mot de passe" aria-label="Changer mon mot de passe">${icon("lock")}</button><button class="icon-btn" id="logout" title="Se déconnecter">${icon("logout")} <span class="wide-only">Déconnexion</span></button></div></header><main class="admin-content" id="main"><div class="loading">Chargement de votre espace…</div></main></div></div>`;
+    )}</nav><div class="sidebar-bottom"><a href="/" data-link>${icon("external")} Voir le site public</a><div class="user-mini"><div class="avatar">${esc(initials(me.name))}</div><div><strong>${esc(me.name)}</strong><span>${esc(roles[me.role])}</span></div></div></div></aside><div class="admin-main"><header class="admin-top"><button class="icon-btn mobile-admin-toggle" id="admin-menu" aria-label="Ouvrir le menu">${icon("menu")}</button><span>Clinique Tchiva <span class="muted">/ Espace de gestion</span></span><div class="admin-top-actions"><span class="tag">${icon("shield")} Espace protégé</span><button class="icon-btn" id="password-button" title="Changer mon code personnel" aria-label="Changer mon code personnel">${icon("lock")}</button><button class="icon-btn" id="logout" title="Se déconnecter">${icon("logout")} <span class="wide-only">Déconnexion</span></button></div></header><main class="admin-content" id="main"><div class="loading">Chargement de votre espace…</div></main></div></div>`;
 }
 const title = (name, description, button = "") =>
   `<div class="admin-title"><div><h1>${name}</h1><p>${description}</p></div>${button}</div>`;
@@ -1008,7 +1009,7 @@ async function renderAdmin() {
       const f = e.currentTarget;
       submit(f, async () => {
         const p = Object.fromEntries(new FormData(f));
-        me = await post("/login", { email: p.email, password: p.password });
+        me = await post("/login", { first_name: p.first_name, last_name: p.last_name, phone: p.phone, code: p.code });
         renderAdmin();
       });
     };
@@ -1035,6 +1036,7 @@ async function renderAdmin() {
     "/gestion/stocks": inventoryPage,
     "/gestion/rapports": reportsPage,
     "/gestion/parametres": settingsPage,
+    "/gestion/journal": auditPage,
     "/gestion/formation": trainingPage,
   };
   try {
@@ -1773,7 +1775,7 @@ async function settingsTab() {
     );
   } else if (tab === "users") {
     const users = await api("/admin/users");
-    el.innerHTML = `<section class="panel"><div class="panel-head"><h3>Comptes du personnel</h3><button class="btn small" id="add-user">${icon("plus")} Créer un compte</button></div><div class="table-scroll"><table><thead><tr><th>Personnel</th><th>Rôle</th><th>État</th><th>Action</th></tr></thead><tbody>${users.map((u) => `<tr><td><strong>${esc(u.name)}</strong><small>${esc(u.email)}</small></td><td>${esc(roles[u.role])}</td><td><span class="tag ${u.active ? "completed" : "cancelled"}">${u.active ? "Actif" : "Désactivé"}</span></td><td>${u.id !== me.id ? `<button class="icon-btn" data-toggle-user="${u.id}">${u.active ? "Désactiver" : "Réactiver"}</button>` : "Votre compte"}</td></tr>`).join("")}</tbody></table></div></section><section class="panel mt20"><h3>Des accès selon les responsabilités</h3><ul class="text-small muted"><li><strong>Administrateur :</strong> tous les modules, paramètres et comptes.</li><li><strong>Accueil :</strong> rendez-vous, calendrier et consommables, sans accès aux finances ni aux consultations.</li><li><strong>Équipe médicale :</strong> rendez-vous, consultations, encaissements liés et stocks.</li><li><strong>Comptabilité :</strong> finances, rapports et stocks, sans noms ni téléphones de patients.</li></ul></section>`;
+    el.innerHTML = `<section class="panel"><div class="panel-head"><h3>Comptes du personnel</h3><button class="btn small" id="add-user">${icon("plus")} Créer un compte</button></div><div class="table-scroll"><table><thead><tr><th>Personnel</th><th>Téléphone</th><th>Rôle</th><th>État</th><th>Actions</th></tr></thead><tbody>${users.map((u) => `<tr><td><strong>${esc(u.first_name || "")} ${esc(u.last_name || u.name)}</strong></td><td>${esc(u.phone || "—")}</td><td>${esc(roles[u.role])}</td><td><span class="tag ${u.active ? "completed" : "cancelled"}">${u.active ? "Actif" : "Désactivé"}</span></td><td>${u.id !== me.id ? `<button class="icon-btn" data-toggle-user="${u.id}" title="${u.active ? 'Désactiver' : 'Réactiver'}">${u.active ? "Désactiver" : "Réactiver"}</button> <button class="icon-btn" data-reset-code="${u.id}" title="Remettre le code personnel">Code</button>` : "Votre compte"}</td></tr>`).join("")}</tbody></table></div></section><section class="panel mt20"><h3>Des accès selon les responsabilités</h3><ul class="text-small muted"><li><strong>Administrateur :</strong> tous les modules, paramètres et comptes.</li><li><strong>Accueil :</strong> rendez-vous, calendrier et consommables, sans accès aux finances ni aux consultations.</li><li><strong>Équipe médicale :</strong> rendez-vous, consultations, encaissements liés et stocks.</li><li><strong>Comptabilité :</strong> finances, rapports et stocks, sans noms ni téléphones de patients.</li></ul></section>`;
     $("#add-user").onclick = userModal;
     $$("[data-toggle-user]").forEach(
       (b) =>
@@ -1788,6 +1790,27 @@ async function settingsTab() {
           } catch (e) {
             toast(e.message);
           }
+        }),
+    );
+    $$("[data-reset-code]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          modal(
+            "Remettre le code personnel",
+            `<form id="reset-code-form">${errorBox}<p class="text-small muted">Saisissez le nouveau code (12 caractères minimum). Toutes les sessions de ce membre seront fermées.</p>${field("Nouveau code personnel *", "code", "password", "", 'required minlength="12" maxlength="72" autocomplete="new-password"', true)}<div class="form-actions"><button type="button" class="btn secondary" onclick="closeModal()">Annuler</button><button class="btn" type="submit">Remettre le code</button></div></form>`,
+          );
+          $("#reset-code-form").onsubmit = (e) => {
+            e.preventDefault();
+            submit(e.target, async () => {
+              const d = Object.fromEntries(new FormData(e.target));
+              await api("/admin/users/" + b.dataset.resetCode + "/reset-code", {
+                method: "POST",
+                body: JSON.stringify(d),
+              });
+              closeModal();
+              toast("Code personnel remis.");
+            });
+          };
         }),
     );
   } else {
@@ -1811,7 +1834,7 @@ async function settingsTab() {
       )
       .join(
         "",
-      )}<h4 class="mt20">À configurer avec votre hébergeur</h4><ul class="text-small muted"><li>Nom de domaine, HTTPS et cookie sécurisé ; définir PUBLIC_URL et COOKIE_SECURE=1.</li><li>Vercel avec PostgreSQL/Neon : DATABASE_URL et ENCRYPTION_KEY en variables privées ; premier administrateur via ADMIN_NOM, ADMIN_PRENOM, ADMIN_EMAIL et ADMIN_PASSWORD, accès restreint, sauvegardes et tests de restauration. Aucun disque persistant local n’est requis dans ce mode.</li><li>Vérifier les formalités ivoiriennes relatives aux données de santé et à leur hébergement.</li><li>Compléter les mentions légales et valider la politique de conservation.</li><li>Créer ou revendiquer la fiche Google Business Profile, vérifier l’adresse et soumettre le sitemap dans Search Console. Aucun classement Google n’est garanti.</li><li>Pour des rappels automatiques : choisir un prestataire SMS ou WhatsApp Business API, documenter le consentement et configurer un ordonnanceur. Non intégré à cette version.</li></ul><div class="notice">${icon("info")}Le balisage local MedicalClinic, les métadonnées, robots.txt et le sitemap sont prévus. Le sitemap et les URL canoniques utilisent le domaine défini dans PUBLIC_URL.</div></section>`;
+      )}<h4 class="mt20">À configurer avec votre hébergeur</h4><ul class="text-small muted"><li>Nom de domaine, HTTPS et cookie sécurisé ; définir PUBLIC_URL et COOKIE_SECURE=1.</li><li>Vercel avec PostgreSQL/Neon : DATABASE_URL et ENCRYPTION_KEY en variables privées ; premier administrateur via ADMIN_NOM, ADMIN_PRENOM, ADMIN_TEL et ADMIN_PASSWORD, accès restreint, sauvegardes et tests de restauration. Aucun disque persistant local n’est requis dans ce mode.</li><li>Vérifier les formalités ivoiriennes relatives aux données de santé et à leur hébergement.</li><li>Compléter les mentions légales et valider la politique de conservation.</li><li>Créer ou revendiquer la fiche Google Business Profile, vérifier l’adresse et soumettre le sitemap dans Search Console. Aucun classement Google n’est garanti.</li><li>Pour des rappels automatiques : choisir un prestataire SMS ou WhatsApp Business API, documenter le consentement et configurer un ordonnanceur. Non intégré à cette version.</li></ul><div class="notice">${icon("info")}Le balisage local MedicalClinic, les métadonnées, robots.txt et le sitemap sont prévus. Le sitemap et les URL canoniques utilisent le domaine défini dans PUBLIC_URL.</div></section>`;
   }
 }
 function contentModal(kind, index = null) {
@@ -1892,7 +1915,7 @@ function scheduleModal(index = null) {
 function userModal() {
   modal(
     "Créer un compte personnel",
-    `<form id="user-form">${errorBox}<div class="form-grid">${field("Nom et prénom *", "name", "text", "", 'required minlength="2" maxlength="100"', true)}${field("E-mail *", "email", "email", "", 'required autocomplete="off"')}${selectField("Rôle", "role", Object.entries(roles), "reception")}${field("Mot de passe initial *", "password", "password", "", 'required minlength="12" maxlength="72" autocomplete="new-password"', true)}<div class="notice field full">${icon("lock")}Utilisez au moins 12 caractères et transmettez le mot de passe par un canal distinct. Chaque membre peut ensuite changer son mot de passe.</div></div><div class="form-actions"><button class="btn" type="submit">Créer le compte</button></div></form>`,
+    `<form id="user-form">${errorBox}<div class="form-grid">${field("Nom *", "last_name", "text", "", 'required minlength="1" maxlength="100"', true)}${field("Prénom *", "first_name", "text", "", 'required minlength="1" maxlength="100"', true)}${field("Téléphone *", "phone", "tel", "", 'required autocomplete="off" placeholder="07 XX XX XX XX"')}${selectField("Rôle", "role", Object.entries(roles), "reception")}${field("Code personnel * (12 caractères minimum)", "code", "password", "", 'required minlength="12" maxlength="72" autocomplete="new-password"', true)}<div class="notice field full">${icon("lock")}Utilisez au moins 12 caractères et transmettez le code par un canal distinct. La direction peut remettre un nouveau code à tout moment.</div></div><div class="form-actions"><button class="btn" type="submit">Créer le compte</button></div></form>`,
   );
   $("#user-form").onsubmit = (e) => {
     e.preventDefault();
@@ -1906,8 +1929,8 @@ function userModal() {
 }
 function passwordModal() {
   modal(
-    "Changer mon mot de passe",
-    `<form id="password-form">${errorBox}${field("Mot de passe actuel", "current", "password", "", 'required autocomplete="current-password"')}<div class="spacer"></div>${field("Nouveau mot de passe (12 caractères minimum)", "password", "password", "", 'required minlength="12" maxlength="72" autocomplete="new-password"')}<div class="form-actions"><button class="btn" type="submit">Mettre à jour</button></div><p class="legal-note">Toutes vos sessions seront fermées. Reconnectez-vous avec le nouveau mot de passe.</p></form>`,
+    "Changer mon code personnel",
+    `<form id="password-form">${errorBox}${field("Code personnel actuel", "current", "password", "", 'required autocomplete="current-password"')}<div class="spacer"></div>${field("Nouveau code personnel (12 caractères minimum)", "password", "password", "", 'required minlength="12" maxlength="72" autocomplete="new-password"')}<div class="form-actions"><button class="btn" type="submit">Mettre à jour</button></div><p class="legal-note">Toutes vos sessions seront fermées. Reconnectez-vous avec le nouveau code.</p></form>`,
   );
   $("#password-form").onsubmit = (e) => {
     e.preventDefault();
@@ -1916,9 +1939,29 @@ function passwordModal() {
       closeModal();
       me = null;
       renderAdmin();
-      toast("Mot de passe changé. Veuillez vous reconnecter.");
+      toast("Code personnel changé. Veuillez vous reconnecter.");
     });
   };
+}
+async function auditPage() {
+  document.title = "Journal d'activité · Clinique Tchiva";
+  if (!me || me.role !== "admin") {
+    $("#main").innerHTML = title("Accès restreint", "Le journal d'activité est réservé à la direction.");
+    return;
+  }
+  const rows = await api("/admin/audit");
+  $("#main").innerHTML =
+    title("Journal d'activité", "Historique complet des actions — réservé à la direction.") +
+    `<section class="panel"><div class="panel-head"><h3>200 dernières actions</h3><span class="tag">${rows.length} entrée(s)</span></div>${
+      rows.length
+        ? `<div class="table-scroll"><table><thead><tr><th>Date</th><th>Utilisateur</th><th>Action</th><th>Entité</th></tr></thead><tbody>${rows
+            .map(
+              (a) =>
+                `<tr><td>${new Date(a.created_at).toLocaleString("fr-FR")}</td><td>${esc(a.first_name || a.name || "Système")}${a.last_name ? " " + esc(a.last_name) : ""}</td><td>${esc(a.action)}</td><td>${esc(a.entity)}</td></tr>`,
+            )
+            .join("")}</tbody></table></div>`
+        : '<div class="mini-empty">' + icon("file") + "<strong>Aucune entrée</strong>Le journal est vide.</div>"
+    }</section>`;
 }
 async function trainingPage() {
   $("#main").innerHTML =
