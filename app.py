@@ -102,6 +102,8 @@ async def security(request,call_next):
     response.headers['X-Content-Type-Options']='nosniff'
     response.headers['Referrer-Policy']='strict-origin-when-cross-origin'
     response.headers['Permissions-Policy']='camera=(), microphone=(), geolocation=()'
+    response.headers['Cross-Origin-Opener-Policy']='same-origin'
+    response.headers['Cross-Origin-Resource-Policy']='same-origin'
     response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src https://www.google.com; frame-ancestors 'self' https://*.arena.ai https://arena.ai https://*.e2b.app; base-uri 'self'; form-action 'self'"
     if STORE.serverless:
         response.headers['Content-Security-Policy']=response.headers['Content-Security-Policy'].replace("frame-ancestors 'self' https://*.arena.ai https://arena.ai https://*.e2b.app","frame-ancestors 'none'")
@@ -195,7 +197,13 @@ def ensure_initial_admin():
 @app.get('/api/public')
 def public():
     s=settings()
+    # Les attributs internes ne doivent jamais apparaître dans la réponse publique.
+    for internal_key in ('_services_catalog_v1',):
+        s.pop(internal_key, None)
     s['team']=[p for p in s['team'] if p.get('published')]
+    # Les praticiens non publiés ne doivent pas fuiter via les plages horaires.
+    published_names={p['name'] for p in s['team']}
+    s['schedules']=[sc for sc in s.get('schedules',[]) if not sc.get('practitioner') or sc['practitioner'] in published_names]
     s['specialties']=[p for p in s['specialties'] if p.get('published')]
     with db() as c: needs_setup=not bool(c.execute('SELECT 1 FROM users LIMIT 1').fetchone())
     return {'settings':s,'needs_setup':needs_setup,'setup_mode':'private_admin'}
