@@ -110,7 +110,7 @@ Exécuter les outils sur un poste privé, avec les variables de la base concern�
 
 ```bash
 python manage.py init-db
-python manage.py reset-password --email utilisateur@votre-domaine.ci
+python manage.py reset-password --phone '+2250707995414'
 python manage.py backup --output /chemin-prive/sauvegarde.fernet
 ```
 
