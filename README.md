@@ -19,7 +19,13 @@ Le dépôt inspecté `moukila2026-cyber/CliniqueTchivaDaloa` manquait de `static
 - Numéros (standard, urgences 24h/24, accueil), WhatsApp, horaires, présentation, coordonnées GPS, Plus Code et assurances conventionnées modifiables depuis Paramètres.
 - Bandeau d’urgence 24h/24, menu de choix d’appel, sélecteur de motif WhatsApp, fiches pratiques des cinq services et section assurances & mutuelles.
 - Carte Google Maps interactive réelle, centrée sur le point GPS exact 6.90645, -6.43381 (Tazibouo, en face du Collège La Paix, Plus Code WH48+HFJ Daloa) et bouton d’itinéraire direct. Aucun schéma de remplacement n’est affiché.
-- Métadonnées et JSON-LD `MedicalClinic`, sitemap/canoniques avec `PUBLIC_URL`.
+- Accueil : carte réelle + Plus Code + GPS + itinéraire face au texte « Une attention sincère. Une relation de confiance. », chiffres animés, accès rapides (urgences, WhatsApp, itinéraire), bandeau des spécialités, tuiles services menant chacune à sa fiche (`/services#service-N`).
+- WhatsApp : la fenêtre propose **d’abord** l’appel d’urgence (+225 07 88 97 55 16), puis trois motifs pré-remplis (renseignement général, tarifs laboratoire, rendez-vous spécialiste).
+- Rendez-vous : le bouton principal enregistre la demande dans la gestion **puis** ouvre WhatsApp vers le +225 07 88 97 55 16 avec un message pré-rempli (nom, téléphone, service, date, heure, précisions, référence) ; bouton secondaire « Enregistrer sans WhatsApp » et bouton de renvoi après envoi. Les précisions ne sont pas stockées en base.
+- Pied de page « Plan du site » (8 pages, services, informations pratiques, encart urgences) ; page 404 conviviale (statut HTTP 404).
+- Couche visuelle `static/vivant.css` / `static/vivant.js` : apparitions au défilement, parallaxe légère du héros, compteurs, bouton haut de page ; tout est désactivé avec `prefers-reduced-motion`.
+- Images en deux tailles (`*-720.jpg` pour mobile, `srcset`), chargement différé hors écran et cache long côté serveur.
+- Métadonnées par page (titre + description), JSON-LD `MedicalClinic`, sitemap/canoniques avec `PUBLIC_URL`.
 - Politique de confidentialité et mentions légales à compléter.
 
 ### Espace protégé
@@ -31,7 +37,7 @@ Le dépôt inspecté `moukila2026-cyber/CliniqueTchivaDaloa` manquait de `static
 - Consommables, seuils d’alerte et mouvements de stock, sans quantité négative.
 - Journal d’activité et guide de prise en main de 15 minutes.
 
-Aucun numéro, horaire, service médical, médecin, diplôme ou témoignage n’a été inventé. Les visuels (accueil, façade, urgences, cinq services, accueil assurances) sont des illustrations IA, pas l’équipe ni les locaux réels. Le PNG fourni est toujours un symbole provisoire à remplacer par le logo officiel.
+Aucun numéro, horaire, service médical, médecin, diplôme ou témoignage n’a été inventé. Les 12 visuels de `static/img/` (accueil, façade, urgences, salle d’attente, cinq services, accueil assurances, équipe, préparation de visite, accueil rendez-vous) sont des illustrations IA, pas l’équipe ni les locaux réels. Le PNG fourni est toujours un symbole provisoire à remplacer par le logo officiel.
 
 ## Configuration PostgreSQL/Neon
 
@@ -152,6 +158,7 @@ Ces tests ne constituent pas une certification de sécurité ou de conformité e
 
 ```text
 app.py                    API, authentification et pages
+app.js / static/app.js    Interface (les deux fichiers doivent rester strictement identiques)
 database.py               Transactions, schéma PostgreSQL/SQLite et compatibilité
 manage.py                 Outils privés et génération locale des secrets
 vercel.json               Réglages de cache de l’API/gestion, sans proxy externe
