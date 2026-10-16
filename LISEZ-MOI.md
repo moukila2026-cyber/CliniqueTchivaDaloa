@@ -36,10 +36,12 @@ Ouvrez votre projet Vercel → **Settings → Environment Variables**. Ajoutez c
 
 | Nom exact de la variable | Valeur à saisir en privé |
 |---|---|
-| ADMIN_NOM | Votre nom |
+| ADMIN_NOM | Votre nom de famille |
 | ADMIN_PRENOM | Votre ou vos prénoms |
-| ADMIN_EMAIL | L’adresse e-mail que vous utiliserez pour vous connecter |
-| ADMIN_PASSWORD | Votre mot de passe personnel, d’au moins 12 caractères |
+| ADMIN_TEL | Votre téléphone, **sans espaces** : `+2250707995414` |
+| ADMIN_PASSWORD | Votre code personnel, d’au moins 12 caractères |
+
+`ADMIN_EMAIL` n’est plus utilisée : **supprimez-la** de vos variables Vercel si elle y figure encore. La connexion se fait désormais par nom + prénom + téléphone + code personnel.
 
 Les prénoms peuvent contenir plusieurs mots. Le nom affiché réunit prénoms et nom (100 caractères au total au maximum). Le code personnel accepte au maximum 72 octets UTF-8 : les lettres accentuées et émojis peuvent occuper plusieurs octets. Un code long et unique conservé dans un gestionnaire de mots de passe est recommandé.
 
@@ -59,11 +61,28 @@ N’ajoutez pas TZ dans Vercel : ce nom y est réservé et UTC correspond déjà
 2. Si ce déploiement a commencé avant l’enregistrement des variables, cliquez **Redeploy**, avec les nouvelles variables de Production.
 3. Attendez le statut **Ready** et vérifiez que ce déploiement dessert votre domaine de production. Ne redéployez pas un ancien commit contenant encore l’ancien app.py.
 4. Ouvrez https://clinique-tchiva-daloa.vercel.app/gestion
-5. Connectez-vous avec **votre e-mail et votre mot de passe**. Aucun code supplémentaire n’est demandé.
+5. Connectez-vous avec **votre nom, votre prénom, votre téléphone et votre code personnel**. Aucun code supplémentaire n’est demandé. Cliquez sur l’icône **œil 👁** à droite du champ pour afficher ou masquer le code que vous saisissez.
+
+Le téléphone saisi est normalisé : `07 07 99 54 14` et `+225 07 07 99 54 14` sont acceptés. Saisissez `ADMIN_NOM` dans « Nom » et `ADMIN_PRENOM` dans « Prénom ».
 
 Le premier compte est créé automatiquement, dans Neon, au premier accès à la base après le redéploiement. Son code personnel est enregistré sous forme de hash bcrypt, et non en clair en base. Les nom, prénom et téléphone sont fournis une seule fois dans la configuration privée, pas à chaque connexion.
 
 Si un compte existe déjà, la mise à jour le conserve tel quel : les quatre variables ne remplacent pas ses informations ou son code. Utilisez alors ses identifiants existants. Un marqueur en base ferme définitivement cette initialisation après le premier compte ; supprimer manuellement un compte ne réouvre pas la création initiale.
+
+### « Identifiants incorrects » après la mise à jour
+
+Les comptes administrateur créés **avant** le passage au téléphone (ancien système e-mail + mot de passe) n’avaient pas de téléphone enregistré en base : la connexion échouait donc avec « Identifiants incorrects ».
+
+C’est corrigé automatiquement. Au démarrage, l’application détecte un compte administrateur sans téléphone et l’aligne sur `ADMIN_TEL`, `ADMIN_NOM`, `ADMIN_PRENOM` et `ADMIN_PASSWORD`, puis ferme toutes les sessions (déconnexion forcée). **Aucune requête SQL manuelle dans Neon n’est nécessaire** : il suffit de redéployer.
+
+Cette synchronisation ne touche jamais un compte déjà pourvu d’un téléphone, ni les comptes du personnel, et ne fait rien si les quatre variables `ADMIN_*` ne sont pas toutes définies.
+
+Si « Identifiants incorrects » persiste :
+
+1. Vérifiez que `ADMIN_TEL` est bien défini dans Vercel, **sans espaces** (ex. `+2250707995414`).
+2. Vérifiez que `ADMIN_PASSWORD` contient au moins 12 caractères.
+3. Redéployez manuellement : Vercel → Deployments → **Redeploy**.
+4. Videz le cache du navigateur (Ctrl+Maj+Suppr) puis réessayez.
 
 ## 4. Nettoyer après la première connexion réussie
 

@@ -139,8 +139,9 @@ Cette commande utilise uniquement la bibliothèque standard Python. Elle n’a p
 
 Elle produit :
 - **ENCRYPTION_KEY** : clé Fernet, pour les noms et téléphones des patients.
-- **SETUP_KEY** : code privé pour créer le premier compte administrateur.
 - **BACKUP_KEY** : clé indépendante de chiffrement des sauvegardes, à garder dans un coffre séparé ; inutile pour le serveur web lui-même.
+
+Le premier compte administrateur ne dépend plus d’un code d’installation : il est créé depuis les variables privées `ADMIN_NOM`, `ADMIN_PRENOM`, `ADMIN_TEL` et `ADMIN_PASSWORD` (voir section 7). `SETUP_KEY` n’est plus utilisée par l’application.
 
 Conservez ces valeurs dans un gestionnaire de mots de passe. **N’exécutez pas cette commande comme Build Command Vercel : cela exposerait les secrets dans les logs.**
 
@@ -171,14 +172,19 @@ Dans **Settings → Environment Variables**, ajoutez pour **Production** :
 |---|---|---|
 | `DATABASE_URL` | La vraie chaîne PostgreSQL poolée de Neon, avec TLS | Oui |
 | `ENCRYPTION_KEY` | La clé Fernet générée sur votre appareil | Oui |
-| `SETUP_KEY` | Votre code privé d’au moins 24 caractères | Oui |
+| `ADMIN_NOM` | Votre nom de famille | Oui pour le premier compte |
+| `ADMIN_PRENOM` | Votre ou vos prénoms | Oui pour le premier compte |
+| `ADMIN_TEL` | Votre téléphone, **sans espaces** : `+2250707995414` | Oui pour le premier compte |
+| `ADMIN_PASSWORD` | Votre code personnel, 12 caractères minimum | Oui pour le premier compte |
 | `COOKIE_SECURE` | `1` | Oui pour HTTPS |
 | `PUBLIC_URL` | Le domaine public final, ex. `https://votre-projet.vercel.app`, sans slash final | À renseigner dès que l’URL est connue |
 | `TZ` | `Africa/Abidjan` | Conseillé ; les comparaisons serveur sont déjà en UTC |
 
+`ADMIN_EMAIL` et `SETUP_KEY` ne sont plus utilisées : **supprimez-les** de vos variables si elles y figurent encore. La connexion se fait par nom + prénom + téléphone + code personnel.
+
 Le projet ne charge pas automatiquement `.env.example`. Les secrets doivent être définis dans les réglages privés Vercel, pas copiés dans un fichier committé.
 
-Vous pouvez faire un premier déploiement avec les trois secrets obligatoires et `COOKIE_SECURE=1`, puis copier l’URL de production réelle dans `PUBLIC_URL` et **redéployer**. Cela finalise aussi les URL canoniques, le sitemap et le logo de partage.
+Vous pouvez faire un premier déploiement avec `DATABASE_URL`, `ENCRYPTION_KEY`, les quatre variables `ADMIN_*` et `COOKIE_SECURE=1`, puis copier l’URL de production réelle dans `PUBLIC_URL` et **redéployer**. Cela finalise aussi les URL canoniques, le sitemap et le logo de partage.
 
 Ne recopiez pas aveuglément des URL d’exemple : elles ne désignent pas vos ressources réelles.
 
@@ -193,12 +199,28 @@ Une clé différente n’anonymise pas une copie de production : ne clonez pas d
 1. Lancez le déploiement Vercel et vérifiez les logs, sans publier les valeurs des variables.
 2. Ouvrez le domaine de production, puis **`/api/public`** : vous devez obtenir un JSON sans secret. Le premier accès initialise le schéma si nécessaire.
 3. Ouvrez **`/gestion`**.
-4. Créez votre propre compte administrateur : nom, e-mail, mot de passe d’au moins 12 caractères, et valeur de **`SETUP_KEY`**.
-5. Une fois le premier compte créé, l’installation initiale est bloquée. Il n’y a pas de mot de passe partagé fourni.
-6. Complétez les coordonnées, horaires, services et médecins vérifiés dans Paramètres.
-7. Créez les comptes du personnel depuis /gestion → Paramètres → Comptes du personnel → Créer un compte (nom, prénom, téléphone, code de 12 caractères minimum). Transmettez le code par un canal distinct.
+4. Votre compte administrateur est **créé automatiquement** au premier accès à la base, depuis `ADMIN_NOM`, `ADMIN_PRENOM`, `ADMIN_TEL` et `ADMIN_PASSWORD`. Aucun formulaire d’inscription n’est ouvert au public.
+5. Connectez-vous avec **nom + prénom + téléphone + code personnel**. Le téléphone saisi est normalisé : `07 07 99 54 14` et `+225 07 07 99 54 14` sont acceptés. Cliquez sur l’icône **œil 👁** à droite du champ pour afficher ou masquer le code saisi.
+6. Une fois le premier compte créé, l’installation initiale est bloquée. Il n’y a pas de mot de passe partagé fourni.
+7. Complétez les coordonnées, horaires, services et médecins vérifiés dans Paramètres.
+8. Créez les comptes du personnel depuis /gestion → Paramètres → Comptes du personnel → Créer un compte (nom, prénom, téléphone, code de 12 caractères minimum). Transmettez le code par un canal distinct.
 
-Sur Neon/Vercel, **aucun fichier `data/setup.key` n’est à chercher** : votre code d’installation est la variable privée `SETUP_KEY`.
+Sur Neon/Vercel, **aucun fichier `data/setup.key` n’est à chercher** et aucune requête SQL manuelle n’est nécessaire dans Neon.
+
+### Compte administrateur créé avant la migration par téléphone
+
+Les comptes administrateur créés avec l’ancien système (e-mail + mot de passe) n’avaient pas de téléphone en base, ce qui produisait **« Identifiants incorrects »** après la mise à jour.
+
+Une synchronisation automatique (`_sync_admin_phone()`) s’exécute au démarrage : elle détecte un compte `admin` sans téléphone, l’aligne sur `ADMIN_TEL`, `ADMIN_NOM`, `ADMIN_PRENOM` et `ADMIN_PASSWORD`, puis ferme toutes les sessions. Il suffit donc de **redéployer** : aucune intervention manuelle dans Neon n’est demandée.
+
+La synchronisation est prudente :
+
+- elle ne concerne que les comptes `role='admin'` **sans téléphone** ; un compte déjà pourvu d’un téléphone n’est jamais écrasé ;
+- le personnel (accueil, médical, comptabilité) n’est jamais modifié ;
+- elle ne fait rien si les quatre variables `ADMIN_*` ne sont pas toutes définies, ou si `ADMIN_PASSWORD` fait moins de 12 caractères ;
+- elle est tracée dans le journal d’audit et ne journalise jamais la valeur des secrets.
+
+Après la première connexion réussie, vous pouvez retirer `ADMIN_PASSWORD` (et les autres variables `ADMIN_*`) puis redéployer : le compte et son code restent en base. Conservez-les si vous souhaitez que la synchronisation puisse se reproduire sur une base restaurée sans téléphone.
 
 Les demandes en ligne restent à confirmer. Les rappels WhatsApp sont manuels et nécessitent le consentement du patient ; aucun message automatique n’a été ajouté par cette adaptation.
 
@@ -251,7 +273,9 @@ Pour restaurer, déchiffrez l’archive avec `BACKUP_KEY` sur un poste isolé, r
 | Le logo n’a pas changé | Vérifiez le nom en minuscules `static/logo.png`, le commit Vercel déployé, puis rechargez sans cache |
 | Échec de build : `static` introuvable | Dossier manquant dans GitHub ou Root Directory mal choisi |
 | Échec au démarrage : `DATABASE_URL` obligatoire | Ajoutez la vraie chaîne privée Neon dans l’environnement Vercel utilisé puis redéployez |
-| Erreur de clé | `ENCRYPTION_KEY` doit être une clé Fernet valide ; `SETUP_KEY` doit faire au moins 24 caractères |
+| Erreur de clé | `ENCRYPTION_KEY` doit être une clé Fernet valide ; `ADMIN_PASSWORD` doit faire au moins 12 caractères |
+| « Identifiants incorrects » sur `/gestion` | Vérifiez que `ADMIN_TEL` est défini **sans espaces** (`+2250707995414`), que `ADMIN_PASSWORD` fait 12 caractères ou plus, puis **Redeploy** dans Vercel → Deployments : la synchronisation du compte s’exécute au démarrage. Videz ensuite le cache du navigateur (Ctrl+Maj+Suppr) |
+| « Identifiants incorrects » après un redéploiement | Saisissez exactement `ADMIN_NOM` dans « Nom » et `ADMIN_PRENOM` dans « Prénom » ; le téléphone tolère `07 XX XX XX XX` comme `+225 07 XX XX XX XX`. Supprimez `ADMIN_EMAIL` des variables, elle n’est plus lue |
 | Erreur TLS | Conservez `sslmode=require` dans la chaîne Neon, sans guillemets parasites |
 | 503 à `/api/public` | Vérifiez les accès Neon, la base/branche, le rôle, les permissions de création et les logs privés ; ne partagez pas la chaîne complète |
 | Erreur d’origine sur un formulaire | Vérifiez le domaine réellement utilisé, `PUBLIC_URL`, le Root Directory et l’absence de l’ancien proxy |

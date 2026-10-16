@@ -974,6 +974,40 @@ input[type="checkbox"] {
 input[type="number"] {
   appearance: textfield;
 }
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.password-wrapper input {
+  padding-right: 44px;
+}
+.password-toggle {
+  position: absolute;
+  right: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+}
+.password-toggle:hover {
+  background: var(--sage);
+  color: var(--green);
+}
+.password-toggle:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 0;
+}
+.password-toggle .ico {
+  width: 18px;
+  height: 18px;
+}
 .check-label {
   display: flex;
   align-items: flex-start;

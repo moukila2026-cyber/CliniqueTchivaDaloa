@@ -38,6 +38,7 @@ app=FastAPI(title='Clinique Tchiva',docs_url=None,redoc_url=None,openapi_url=Non
 def db():
     STORE.initialize(DEFAULT)
     ensure_initial_admin()
+    _sync_admin_phone()
     with STORE.connection() as con:yield con
 def now(): return datetime.now(timezone.utc).isoformat()
 def enc(x): return CIPHER.encrypt(str(x).encode()).decode()
@@ -204,6 +205,59 @@ def ensure_initial_admin():
                             c.execute('INSERT INTO bootstrap_state(id,initialized_at) VALUES(1,?)',(now(),))
                     # Sans configuration complète, rester fermé, jamais d'inscription publique.
         _BOOTSTRAP_CHECKED=True
+
+# Les comptes administrateur créés avant la migration « nom + prénom +
+# téléphone + code » (authentification par e-mail) n'ont pas de téléphone en
+# base : la connexion échouait avec « Identifiants incorrects ». Cette
+# synchronisation les aligne sur les variables privées Vercel, une seule fois,
+# sans requête SQL manuelle dans Neon.
+_SYNC_CHECKED=False
+_SYNC_LOCK=threading.RLock()
+def _sync_admin_phone():
+    global _SYNC_CHECKED
+    if _SYNC_CHECKED:return
+    with _SYNC_LOCK:
+        if _SYNC_CHECKED:return
+        logger=logging.getLogger('tchiva')
+        family=os.environ.get('ADMIN_NOM','').strip()
+        given=os.environ.get('ADMIN_PRENOM','').strip()
+        phone=normalize_phone(os.environ.get('ADMIN_TEL','').strip())
+        code=os.environ.get('ADMIN_PASSWORD','')
+        if not all((family,given,phone,code)):
+            # Configuration incomplète : on ne modifie rien. L'installation
+            # reste fermée et aucune inscription publique n'est ouverte.
+            _SYNC_CHECKED=True;return
+        fullname=(given+' '+family).strip()
+        if len(fullname)>100 or len(phone)>30:
+            logger.warning('Synchronisation administrateur ignorée : ADMIN_NOM, ADMIN_PRENOM ou ADMIN_TEL hors limites, sans afficher leurs valeurs.')
+            _SYNC_CHECKED=True;return
+        try:hashed=password_hash(code)
+        except HTTPException:
+            logger.warning('Synchronisation administrateur ignorée : ADMIN_PASSWORD doit contenir au moins 12 caractères et au plus 72 octets, sans afficher sa valeur.')
+            _SYNC_CHECKED=True;return
+        try:
+            with STORE.connection() as c:
+                c.execute('BEGIN IMMEDIATE')
+                rows=c.execute("SELECT id,phone FROM users WHERE role='admin' ORDER BY id").fetchall()
+                legacy=[r for r in rows if not str(r['phone'] or '').strip()]
+                if not legacy:_SYNC_CHECKED=True;return
+                # Un seul compte est aligné : plusieurs administrateurs sans
+                # téléphone partageraient sinon exactement les mêmes identifiants.
+                uid=legacy[0]['id']
+                c.execute('UPDATE users SET name=?,first_name=?,last_name=?,phone=?,password=? WHERE id=?',(fullname,given,family,phone,hashed,uid))
+                # Déconnexion forcée : aucune session ne doit survivre à un
+                # changement d'identifiants et de code personnel.
+                c.execute('DELETE FROM sessions')
+                c.execute('INSERT INTO audit(user_id,action,entity,created_at) VALUES(?,?,?,?)',(uid,'Synchronisation automatique du compte administrateur (téléphone manquant)',str(uid),now()))
+                if len(legacy)>1:
+                    logger.warning('Plusieurs comptes administrateur sans téléphone : seul le plus ancien a été synchronisé. Vérifiez les autres depuis /gestion → Paramètres → Comptes du personnel.')
+                logger.info('Compte administrateur synchronisé avec la configuration privée ; toutes les sessions ont été fermées.')
+        except DATABASE_ERRORS:
+            # Base injoignable : rien n'est marqué comme fait, la
+            # synchronisation sera retentée au prochain accès.
+            logger.warning('Synchronisation administrateur reportée : base de données injoignable.')
+            return
+        _SYNC_CHECKED=True
 
 @app.get('/api/public')
 def public():
