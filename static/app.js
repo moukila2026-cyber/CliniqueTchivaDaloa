@@ -56,6 +56,8 @@ const ICONS = {
     '<path d="M9.5 3h5M10.5 3v5L5.8 17a2 2 0 0 0 1.8 3h8.8a2 2 0 0 0 1.8-3L13.5 8V3"/><path d="M8 15h8"/>',
   eye:
     '<path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.6"/>',
+  eyeOff:
+    '<path d="M3 3l18 18"/><path d="M10.6 6.9A10 10 0 0 1 12 6.5c6 0 9.5 5.5 9.5 5.5a17.6 17.6 0 0 1-3.4 4M6.3 8.2A17.4 17.4 0 0 0 2.5 12S6 17.5 12 17.5a9.8 9.8 0 0 0 3.7-.7"/><path d="M9.9 10.1a2.6 2.6 0 0 0 3.6 3.6"/>',
   ear:
     '<path d="M8.5 9a4 4 0 1 1 8 0c0 2.6-2.6 3-3.6 4.6-1 1.6-.9 3-.9 4.4A3.5 3.5 0 0 1 8.5 21"/><path d="M11.2 8.8a1.6 1.6 0 0 1 3 0"/>',
   bandage:
@@ -632,8 +634,22 @@ const field = (
   value = "",
   extra = "",
   full = false,
-) =>
-  `<div class="field ${full ? "full" : ""}"><label for="f-${name}">${label}</label><input id="f-${name}" name="${name}" type="${type}" value="${esc(value)}" ${extra}></div>`;
+) => {
+  const input = `<input id="f-${name}" name="${name}" type="${type}" value="${esc(
+    value,
+  )}" ${extra}>`;
+  // Les codes personnels sont masqués par défaut ; le bouton œil permet de
+  // vérifier la saisie sans exposer le champ en permanence.
+  const control =
+    type === "password"
+      ? `<div class="password-wrapper">${input}<button class="password-toggle" type="button" data-password-toggle aria-pressed="false" aria-label="Afficher le code personnel" title="Afficher le code personnel">${icon(
+          "eye",
+        )}</button></div>`
+      : input;
+  return `<div class="field ${
+    full ? "full" : ""
+  }"><label for="f-${name}">${label}</label>${control}</div>`;
+};
 const selectField = (label, name, options, value = "", full = false) =>
   `<div class="field ${full ? "full" : ""}"><label for="f-${name}">${label}</label><select id="f-${name}" name="${name}">${options
     .map((o) => {
@@ -644,6 +660,25 @@ const selectField = (label, name, options, value = "", full = false) =>
 const textarea = (label, name, value = "", extra = "") =>
   `<div class="field full"><label for="f-${name}">${label}</label><textarea name="${name}" id="f-${name}" ${extra}>${esc(value)}</textarea></div>`;
 const errorBox = '<div class="form-error" role="alert"></div>';
+// Un seul écouteur global : il couvre la page de connexion comme les modales
+// (création de compte, changement de code, remise de code) injectées ensuite.
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-password-toggle]");
+  if (!btn) return;
+  e.preventDefault();
+  const input = btn.parentElement.querySelector("input");
+  if (!input) return;
+  const reveal = input.type === "password";
+  input.type = reveal ? "text" : "password";
+  const text = reveal
+    ? "Masquer le code personnel"
+    : "Afficher le code personnel";
+  btn.innerHTML = icon(reveal ? "eyeOff" : "eye");
+  btn.setAttribute("aria-label", text);
+  btn.setAttribute("title", text);
+  btn.setAttribute("aria-pressed", String(reveal));
+  input.focus({ preventScroll: true });
+});
 function booking() {
   const wanted = new URLSearchParams(location.search).get("service") || "";
   const specNames = (S.specialties || []).map((s) => s.name);
