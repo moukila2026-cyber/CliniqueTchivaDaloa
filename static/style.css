@@ -3664,3 +3664,49 @@ tr:last-child td {
   color: var(--text);
   text-decoration: underline;
 }
+
+/* Prestations et préparation visibles dès l’accueil, sans survol requis. */
+.service-tile-highlights {
+  padding-left: 18px;
+  margin: 14px 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.service-tile-highlights li + li { margin-top: 6px; }
+.service-tile-practical {
+  display: block;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.service-tile-practical b {
+  display: block;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.visit-guide { background: var(--sage); }
+.visit-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.visit-guide-grid > li {
+  background: var(--white, #fff);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 26px;
+}
+.visit-guide-number { color: var(--green); font-size: 24px; font-weight: 700; }
+.visit-guide-grid h3 { margin: 12px 0; font-size: 21px; }
+.visit-guide-grid p { line-height: 1.7; margin-bottom: 18px; }
+.visit-guide .notice p { margin: 0; }
+@media (max-width: 860px) {
+  .visit-guide-grid { grid-template-columns: 1fr; }
+}
