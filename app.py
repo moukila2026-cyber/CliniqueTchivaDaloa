@@ -60,6 +60,14 @@ DEFAULT={
 def settings():
     with db() as c:
         data=json.loads(c.execute('SELECT data FROM settings WHERE id=1').fetchone()[0])
+        # Mise à niveau des anciennes installations créées sans offre de soins.
+        # Le marqueur permet ensuite à l’administration de retirer des services
+        # sans que chaque lecture ne les republie automatiquement.
+        if not data.get('_services_catalog_v1'):
+            if not data.get('specialties'):
+                data['specialties']=json.loads(json.dumps(DEFAULT['specialties']))
+            data['_services_catalog_v1']=True
+            c.execute('UPDATE settings SET data=? WHERE id=1',(json.dumps(data),))
     for k,v in DEFAULT.items():
         if k not in data: data[k]=json.loads(json.dumps(v)) if isinstance(v,(list,dict)) else v
     return data
@@ -502,7 +510,7 @@ def save_settings(p:Settings,user=Depends(auth)):
     for s in p.schedules:
         if s.end<=s.start:raise HTTPException(422,'La fin d’une plage doit être après le début.')
         if s.practitioner and s.practitioner not in names:raise HTTPException(422,'Une disponibilité doit être associée à un praticien publié.')
-    with db() as c:c.execute('UPDATE settings SET data=? WHERE id=1',(p.model_dump_json(),));log(c,user,'Modification des informations','configuration')
+    with db() as c:c.execute('UPDATE settings SET data=? WHERE id=1',(json.dumps({**p.model_dump(), '_services_catalog_v1':True}),));log(c,user,'Modification des informations','configuration')
     return {'ok':True}
 
 class UserCreate(BaseModel):
