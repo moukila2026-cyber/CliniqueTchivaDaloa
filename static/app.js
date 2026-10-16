@@ -50,6 +50,20 @@ const ICONS = {
   trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>',
   stethoscope:
     '<path d="M5 3v5a5 5 0 0 0 10 0V3M3 3h4m6 0h4m-7 10v3a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="11" r="3"/>',
+  siren:
+    '<path d="M5 20h14M6.5 20v-3.5h11V20"/><path d="M9 16.5V10a3 3 0 0 1 6 0v6.5"/><path d="M12 4.5V2.5M5.2 6.7 3.8 5.3M18.8 6.7l1.4-1.4"/><path d="M12 9.5v3"/>',
+  flask:
+    '<path d="M9.5 3h5M10.5 3v5L5.8 17a2 2 0 0 0 1.8 3h8.8a2 2 0 0 0 1.8-3L13.5 8V3"/><path d="M8 15h8"/>',
+  eye:
+    '<path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.6"/>',
+  ear:
+    '<path d="M8.5 9a4 4 0 1 1 8 0c0 2.6-2.6 3-3.6 4.6-1 1.6-.9 3-.9 4.4A3.5 3.5 0 0 1 8.5 21"/><path d="M11.2 8.8a1.6 1.6 0 0 1 3 0"/>',
+  bandage:
+    '<rect x="2.4" y="8.6" width="19.2" height="6.8" rx="3.4" transform="rotate(-22 12 12)"/><path d="M10.2 11.6h.01M13.8 12.4h.01M12 10h.01"/>',
+  card:
+    '<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6 15h4"/>',
+  whatsapp:
+    '<path d="M12 3a9 9 0 0 0-7.7 13.7L3.2 21l4.5-1.2A9 9 0 1 0 12 3Z"/><path d="M9.2 9.4c0 3 2.4 5.4 5.4 5.4.6 0 1.1-.5 1.1-1.1v-.6l-1.6-.8-.8.8c-1-.4-1.9-1.3-2.3-2.3l.8-.8-.8-1.6H10c-.6 0-1.1.5-1.1 1Z"/>',
 };
 const icon = (n) =>
   `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ICONS.info}</svg>`;
@@ -167,7 +181,33 @@ function whatsappNumber() {
   let p = (S.whatsapp || "").replace(/[^0-9]/g, "");
   return p.length === 10 ? "225" + p : p;
 }
-function whatsapp() {
+/* --------------------------------------------------------------------------
+   Coordonnées de la clinique. Les valeurs de secours reprennent la fiche
+   officielle communiquée par la clinique ; les réglages restent modifiables
+   depuis l’espace de gestion.
+   -------------------------------------------------------------------------- */
+const digitsOnly = (x) => String(x ?? "").replace(/[^0-9]/g, ""),
+  telHref = (x) => "tel:+" + digitsOnly(x),
+  emergencyPhone = () => S.emergency_phone || "+225 07 88 97 55 16",
+  landlinePhone = () => S.phone || "+225 27 24 37 50 80",
+  receptionPhones = () =>
+    S.reception_phones && S.reception_phones.length
+      ? S.reception_phones
+      : ["+225 07 07 99 54 14", "+225 05 05 81 94 44"],
+  plusCode = () => S.plus_code || "WH48+HFJ Daloa",
+  gpsLat = () => String(S.latitude || "6.90645"),
+  gpsLng = () => String(S.longitude || "-6.43381"),
+  mapEmbedUrl = () =>
+    S.map_url ||
+    `https://www.google.com/maps?q=${gpsLat()},${gpsLng()}&output=embed`,
+  mapPointUrl = () => `https://www.google.com/maps?q=${gpsLat()},${gpsLng()}`,
+  mapDirectionsUrl = () =>
+    `https://www.google.com/maps/dir/?api=1&destination=${gpsLat()},${gpsLng()}`,
+  insuranceList = () =>
+    S.insurances && S.insurances.length
+      ? S.insurances
+      : ["CNAM", "ASCOMA", "SANLAM", "AXA", "GMC", "MUGEF-CI"];
+function openWhatsApp(message) {
   const p = whatsappNumber();
   if (!p) {
     modal(
@@ -180,11 +220,96 @@ function whatsapp() {
     "https://wa.me/" +
       p +
       "?text=" +
-      encodeURIComponent(
-        "Bonjour, je souhaite un renseignement auprès de la Clinique Tchiva de Daloa.",
-      ),
+      encodeURIComponent(message || "Bonjour, je souhaite un renseignement auprès de la Clinique Tchiva de Daloa."),
     "_blank",
     "noopener,noreferrer",
+  );
+}
+/* Sélecteur de motif WhatsApp : le message est pré-rempli selon le besoin. */
+const WHATSAPP_MOTIFS = [
+  {
+    id: "general",
+    icon: "info",
+    title: "Renseignement général",
+    hint: "Horaires, accès, prise en charge, documents à apporter.",
+    message:
+      "Bonjour, je souhaite un renseignement général auprès de la Clinique Tchiva de Daloa.",
+  },
+  {
+    id: "laboratoire",
+    icon: "flask",
+    title: "Tarifs laboratoire",
+    hint: "Analyses, bilans à jeun et sérologies : demandez la grille tarifaire.",
+    message:
+      "Bonjour, je souhaite connaître les tarifs des analyses de laboratoire à la Clinique Tchiva de Daloa.",
+  },
+  {
+    id: "specialiste",
+    icon: "calendar",
+    title: "Demande de rendez-vous spécialiste",
+    hint: "Ophtalmologie, ORL, chirurgie ou suivi médical.",
+    message:
+      "Bonjour, je souhaite demander un rendez-vous avec un spécialiste (médecine générale, ophtalmologie, ORL, laboratoire ou chirurgie) à la Clinique Tchiva de Daloa.",
+  },
+];
+function whatsapp() {
+  const p = whatsappNumber();
+  if (!p) {
+    openWhatsApp();
+    return;
+  }
+  modal(
+    "Écrire à la clinique sur WhatsApp",
+    `<div class="wa-menu"><p class="menu-intro">Choisissez votre motif : le message est pré-rempli, vous pouvez le compléter avant l’envoi.</p>${WHATSAPP_MOTIFS.map(
+      (m) =>
+        `<button class="wa-option" data-wa="${m.id}"><span class="wa-icon">${icon(m.icon)}</span><span class="wa-body"><strong>${esc(m.title)}</strong><small>${esc(m.hint)}</small></span><span class="wa-go">${icon("whatsapp")}</span></button>`,
+    ).join("")}<p class="legal-note">${icon("external")} La conversation s’ouvre sur WhatsApp, un service externe soumis à ses propres conditions. N’y communiquez pas d’informations médicales sensibles.</p></div>`,
+  );
+  $$("[data-wa]").forEach((b) => {
+    const m = WHATSAPP_MOTIFS.find((x) => x.id === b.dataset.wa);
+    b.onclick = () => {
+      closeModal();
+      openWhatsApp(m.message);
+    };
+  });
+}
+/* Menu d’appel : standard, urgences 24h/24 et accueil. */
+function phoneMenu() {
+  const reception = receptionPhones();
+  const lines = [
+    {
+      label: "Standard fixe",
+      hint: "Appels et suivi administratif, aux heures d’accueil.",
+      numbers: [landlinePhone()],
+      icon: "phone",
+    },
+    {
+      label: "Urgences & Garde 24h/24",
+      hint: "Joignable jour et nuit, week-ends et jours fériés.",
+      numbers: [emergencyPhone()],
+      icon: "siren",
+      urgent: true,
+    },
+    {
+      label: "Accueil & Renseignements",
+      hint: "Rendez-vous, horaires, orientation et préparation de votre venue.",
+      numbers: reception,
+      icon: "users",
+    },
+  ];
+  modal(
+    "Appeler la Clinique Tchiva",
+    `<div class="call-menu"><p class="menu-intro">Choisissez le poste à joindre. L’appel part directement depuis votre téléphone.</p>${lines
+      .map(
+        (l) =>
+          `<div class="call-group${l.urgent ? " urgent" : ""}"><div class="call-head"><span class="call-icon">${icon(l.icon)}</span><div><strong>${esc(l.label)}</strong><small>${esc(l.hint)}</small></div></div><div class="call-numbers">${l.numbers
+            .map(
+              (n) =>
+                `<a class="call-number" href="${telHref(n)}">${icon("phone")}<span>${esc(n)}</span></a>`,
+            )
+            .join("")}</div></div>`,
+      )
+      .join("")}<div class="notice warning">${icon("siren")}<div>En cas d’urgence vitale, appelez directement le <strong>${esc(emergencyPhone())}</strong>. Le formulaire en ligne et WhatsApp ne sont pas surveillés en permanence.</div></div></div>`,
   );
 }
 function header() {
@@ -195,19 +320,144 @@ function header() {
     ["/equipe", "Notre équipe"],
     ["/contact", "Contact"],
   ];
-  return `<div class="topbar"><div class="container"><span>${icon("pin")} Tazibouo, en face du Collège La Paix · Daloa</span><a href="/gestion" data-link>${icon("lock")} Espace personnel</a></div></div><header class="site-header"><div class="container header-inner">${brand()}<nav class="nav" id="public-nav" aria-label="Navigation principale">${items.map(([p, t]) => `<a href="${p}" data-link class="${route === p ? "active" : ""}" ${route === p ? 'aria-current="page"' : ""}>${t}</a>`).join("")}</nav><a class="btn" href="/rendez-vous" data-link>${icon("calendar")} Prendre rendez-vous</a><button class="menu-toggle" id="menu-toggle" aria-label="Ouvrir le menu" aria-expanded="false">${icon("menu")}</button></div></header>`;
+  return `<div class="emergency-bar"><div class="container emergency-inner"><span class="emergency-beacon" aria-hidden="true"></span><p class="emergency-text"><strong>Urgences médicales 24h/24</strong><a class="emergency-number" href="${telHref(emergencyPhone())}">${esc(emergencyPhone())}</a></p><a class="emergency-call" href="${telHref(emergencyPhone())}">${icon("siren")}<span>Appeler les urgences</span></a></div></div><div class="topbar"><div class="container"><span>${icon("pin")} Tazibouo, en face du Collège La Paix · Daloa</span><a href="/gestion" data-link>${icon("lock")} Espace personnel</a></div></div><header class="site-header"><div class="container header-inner">${brand()}<nav class="nav" id="public-nav" aria-label="Navigation principale">${items.map(([p, t]) => `<a href="${p}" data-link class="${route === p ? "active" : ""}" ${route === p ? 'aria-current="page"' : ""}>${t}</a>`).join("")}</nav><div class="header-actions"><button class="btn ghost header-call" data-phone>${icon("phone")} Téléphoner</button><a class="btn" href="/rendez-vous" data-link>${icon("calendar")} Prendre rendez-vous</a></div><button class="menu-toggle" id="menu-toggle" aria-label="Ouvrir le menu" aria-expanded="false">${icon("menu")}</button></div></header>`;
 }
 function footer() {
-  return `<footer class="footer"><div class="container"><div class="footer-grid"><div>${brand()}<p>Une clinique de proximité, au cœur de Daloa.<br>Votre santé, notre priorité.</p></div><div><h4>La clinique</h4><ul><li><a href="/clinique" data-link>Qui sommes-nous ?</a></li><li><a href="/services" data-link>Nos services</a></li><li><a href="/equipe" data-link>Notre équipe médicale</a></li></ul></div><div><h4>Votre visite</h4><ul><li><a href="/rendez-vous" data-link>Prendre rendez-vous</a></li><li><a href="/contact" data-link>Horaires & accès</a></li><li><a href="/contact" data-link>Nous contacter</a></li></ul></div><div><h4>Retrouvez-nous</h4><p>${esc(S.address)}<br>${esc(S.city)}, Côte d’Ivoire</p><a href="tel:+2252724375080">${icon("phone")} +225 27 24 37 50 80</a><br><a href="tel:+2250788975516" class="muted-link"><small>+225 07 88 97 55 16</small></a></div></div><div class="footer-bottom"><span>© ${new Date().getFullYear()} Clinique Tchiva. Tous droits réservés.</span><div><a href="/mentions-legales" data-link>Mentions légales</a><a href="/confidentialite" data-link>Confidentialité</a><a href="/gestion" data-link>Espace de gestion ${icon("external")}</a></div></div></div></footer><button class="whatsapp" id="whatsapp-float" title="Contacter la clinique sur WhatsApp" aria-label="Contacter la clinique sur WhatsApp">${icon("chat")}</button>`;
+  return `<footer class="footer"><div class="container"><div class="footer-grid"><div>${brand()}<p>Une clinique de proximité, au cœur de Daloa.<br>Votre santé, notre priorité.</p></div><div><h4>La clinique</h4><ul><li><a href="/clinique" data-link>Qui sommes-nous ?</a></li><li><a href="/services" data-link>Nos services</a></li><li><a href="/equipe" data-link>Notre équipe médicale</a></li></ul></div><div><h4>Votre visite</h4><ul><li><a href="/rendez-vous" data-link>Prendre rendez-vous</a></li><li><a href="/contact" data-link>Horaires & accès</a></li><li><a href="/contact" data-link>Nous contacter</a></li></ul></div><div><h4>Retrouvez-nous</h4><p>${esc(S.address)}<br>${esc(S.city)}, Côte d’Ivoire<br><small>Plus Code ${esc(plusCode())} · GPS ${esc(gpsLat())}, ${esc(gpsLng())}</small></p><a href="${telHref(landlinePhone())}">${icon("phone")} Standard : ${esc(landlinePhone())}</a><br><a class="footer-urgent" href="${telHref(emergencyPhone())}">${icon("siren")} Urgences 24h/24 : ${esc(emergencyPhone())}</a><br><a class="muted-link" href="${telHref(receptionPhones()[0])}"><small>Accueil : ${esc(receptionPhones().join(" · "))}</small></a></div></div><div class="footer-bottom"><span>© ${new Date().getFullYear()} Clinique Tchiva. Tous droits réservés.</span><div><a href="/mentions-legales" data-link>Mentions légales</a><a href="/confidentialite" data-link>Confidentialité</a><a href="/gestion" data-link>Espace de gestion ${icon("external")}</a></div></div></div></footer><button class="whatsapp" id="whatsapp-float" title="Contacter la clinique sur WhatsApp" aria-label="Contacter la clinique sur WhatsApp">${icon("whatsapp")}</button><div class="callbar" id="callbar"><a class="callbar-btn urgent" href="${telHref(emergencyPhone())}">${icon("siren")}<span>Urgence 24h/24</span></a><button class="callbar-btn" data-phone>${icon("phone")}<span>Téléphoner</span></button><button class="callbar-btn" data-whatsapp>${icon("whatsapp")}<span>WhatsApp</span></button></div>`;
 }
 function pageHero(kicker, title, description) {
   return `<section class="page-hero"><div class="container"><div class="breadcrumbs"><a href="/" data-link>Accueil</a>${icon("chevron")}<span>${esc(kicker)}</span></div><div class="eyebrow">CLINIQUE TCHIVA · DALOA</div><h1>${title}</h1><p>${description}</p></div></section>`;
 }
 function cta() {
-  return `<div class="cta"><div><h2>Faisons le premier pas,<br>ensemble.</h2><p>Une question ou besoin d’un rendez-vous ? Nous sommes à votre écoute.</p></div><div class="hero-actions"><a href="/rendez-vous" data-link class="btn light">Demander un rendez-vous ${icon("arrow")}</a><button class="btn ghost" data-whatsapp>${icon("chat")} Écrivez-nous</button></div></div>`;
+  return `<div class="cta"><div><h2>Faisons le premier pas,<br>ensemble.</h2><p>Une question ou besoin d’un rendez-vous ? Nous sommes à votre écoute.</p></div><div class="hero-actions"><a href="/rendez-vous" data-link class="btn light">Demander un rendez-vous ${icon("arrow")}</a><button class="btn ghost" data-whatsapp>${icon("whatsapp")} Écrivez-nous</button></div></div>`;
+}
+/* --------------------------------------------------------------------------
+   Fiches pratiques des cinq services publiés par la clinique.
+   Le texte reste celui validé par la clinique dans les réglages ; les
+   compléments ci-dessous (repères, consignes) sont des fiches d’information.
+   -------------------------------------------------------------------------- */
+const SERVICE_DETAILS = [
+  {
+    keys: ["medecine", "general"],
+    icon: "stethoscope",
+    image: "/static/img/service-medecine-generale.jpg",
+    alt: "Consultation de médecine générale entre un médecin, un patient adulte et son enfant",
+    tag: "Médecine générale",
+    short: "Consultations adultes et enfants, bilans de santé, suivi des maladies chroniques.",
+    highlights: [
+      "Consultations adultes et pédiatriques",
+      "Bilans de santé et conseils de prévention",
+      "Suivi des pathologies chroniques : hypertension, diabète, paludisme",
+      "Orientation vers les spécialités de la clinique",
+    ],
+    practical:
+      "Apportez vos ordonnances, vos résultats d’analyses et vos traitements en cours.",
+  },
+  {
+    keys: ["ophtalmo", "oeil", "yeux", "vision"],
+    icon: "eye",
+    image: "/static/img/service-ophtalmologie.jpg",
+    alt: "Examen de la vue avec un appareil de réfraction chez un ophtalmologue",
+    tag: "Ophtalmologie",
+    short: "Réfraction, acuité visuelle, dépistage de la cataracte et du glaucome.",
+    highlights: [
+      "Examens de réfraction et mesure de l’acuité visuelle",
+      "Dépistage de la cataracte et du glaucome",
+      "Bilans ophtalmologiques complets",
+      "Suivi des affections de la vision et conseils de correction",
+    ],
+    practical:
+      "Venez avec vos lunettes ou lentilles actuelles. En cas d’examen avec dilatation de la pupille, prévoyez un accompagnant.",
+  },
+  {
+    keys: ["orl", "oto", "oreille", "rhino"],
+    icon: "ear",
+    image: "/static/img/service-orl.jpg",
+    alt: "Consultation ORL avec examen de l’oreille à l’otoscope",
+    tag: "ORL",
+    short: "Oreilles, nez, gorge : diagnostic, audiométrie et soins spécialisés.",
+    highlights: [
+      "Consultations et diagnostics des affections des oreilles, du nez et de la gorge",
+      "Audiométrie et évaluation de l’audition",
+      "Soins spécialisés et suivi des troubles ORL",
+      "Conseils de prévention audition et voix",
+    ],
+    practical:
+      "Signalez à l’accueil vos traitements en cours et apportez vos anciens comptes rendus.",
+  },
+  {
+    keys: ["laboratoire", "analyse", "biologie", "labo"],
+    icon: "flask",
+    image: "/static/img/service-laboratoire.jpg",
+    alt: "Technicien de laboratoire manipulant des tubes de prélèvements sanguins",
+    tag: "Laboratoire d’analyses médicales",
+    short: "Prélèvements sur place, biochimie, NFS, bilans à jeun et sérologies.",
+    highlights: [
+      "Prélèvements réalisés sur place",
+      "Analyses biochimiques et hématologie (NFS)",
+      "Bilans à jeun et sérologies",
+      "Consignes de prélèvement précisées avant votre venue",
+    ],
+    practical:
+      "Pour un bilan à jeun (glycémie, bilan lipidique), ne mangez pas pendant 12 heures ; l’eau reste autorisée. Apportez votre ordonnance et signalez vos traitements.",
+  },
+  {
+    keys: ["chirurgie", "chirurgical", "operation"],
+    icon: "bandage",
+    image: "/static/img/service-chirurgie.jpg",
+    alt: "Salle de petite chirurgie avec une équipe soignante et du matériel stérile",
+    tag: "Chirurgie",
+    short: "Consultations chirurgicales, petites chirurgies, pansements et suivi.",
+    highlights: [
+      "Consultations chirurgicales spécialisées",
+      "Petites chirurgies et actes réalisés sur place",
+      "Pansements et soins post-opératoires",
+      "Suivi jusqu’à cicatrisation complète",
+    ],
+    practical:
+      "Apportez vos examens d’imagerie, comptes rendus et la liste de vos traitements, y compris les anticoagulants.",
+  },
+];
+const norm = (x) =>
+  String(x || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+const detailFor = (name) => {
+  const n = norm(name);
+  return SERVICE_DETAILS.find((d) => d.keys.some((k) => n.includes(norm(k))));
+};
+function serviceCards() {
+  const list = S.specialties || [];
+  if (!list.length)
+    return `<div class="empty-state">${icon("stethoscope")}<h3>Notre offre de soins se précise.</h3><p>La liste des services et spécialités est en cours de renseignement par la clinique. Pour connaître les consultations disponibles, rapprochez-vous de l’accueil.</p><a class="btn" href="/contact" data-link>Nous contacter ${icon("arrow")}</a></div>`;
+  return `<div class="service-list">${list
+    .map((s, i) => {
+      const d = detailFor(s.name);
+      return `<article class="service-detail" id="service-${i + 1}"><div class="service-media"><img src="${d ? d.image : "/static/hero-clinic.jpg"}" alt="${esc(d ? d.alt : "")}" loading="lazy" decoding="async"><span class="service-tag">${icon(d ? d.icon : "stethoscope")}<span>${esc(d ? d.tag : s.name)}</span></span></div><div class="service-body"><div class="icon-box">${icon(d ? d.icon : "stethoscope")}</div><h3>${esc(s.name)}</h3><p>${esc(s.description || "Renseignez-vous auprès de l’accueil pour connaître les modalités de consultation.")}</p>${
+        d
+          ? `<ul class="checks">${d.highlights.map((h) => `<li>${icon("check")} ${esc(h)}</li>`).join("")}</ul><div class="service-practical">${icon("info")}<div><strong>Pour préparer votre venue</strong><span>${esc(d.practical)}</span></div></div>`
+          : ""
+      }<div class="service-actions"><a class="btn small" href="/rendez-vous" data-link>${icon("calendar")} Rendez-vous</a><button class="btn small secondary" data-phone>${icon("phone")} Téléphoner</button><button class="btn small ghost" data-whatsapp>${icon("whatsapp")} WhatsApp</button></div></div></article>`;
+    })
+    .join("")}</div>`;
+}
+function servicesPreview() {
+  const list = (S.specialties || []).map((s) => ({ ...s, ...detailFor(s.name) }));
+  if (!list.length) return "";
+  return `<section class="section sage"><div class="container"><div class="section-head"><div><div class="eyebrow">CINQ SPÉCIALITÉS, UN SEUL LIEU</div><h2>Nos services,<br>en un coup d’œil.</h2></div><a class="text-link" href="/services" data-link>Voir les fiches détaillées ${icon("arrow")}</a></div><div class="service-tiles">${list
+    .map(
+      (s) =>
+        `<a class="service-tile" href="/services" data-link><span class="service-tile-img"><img src="${s.image || "/static/hero-clinic.jpg"}" alt="${esc(s.alt || "")}" loading="lazy" decoding="async"></span><span class="service-tile-body"><span class="service-tile-icon">${icon(s.icon || "stethoscope")}</span><strong>${esc(s.name)}</strong><small>${esc(s.short || s.description || "")}</small></span>`,
+    )
+    .join("")}</div></div></section>`;
+}
+function insurancesSection(compact = false) {
+  const list = insuranceList();
+  return `<section class="section insurance-section${compact ? " compact" : ""}"><div class="container insurance-grid"><div class="insurance-copy"><div class="eyebrow">ASSURANCES & MUTUELLES</div><h2>Votre prise en charge,<br>simplifiée.</h2><p>La Clinique Tchiva accueille les patients assurés auprès des organismes conventionnés. Présentez vos documents à l’accueil : vos droits sont vérifiés avec votre organisme avant la consultation.</p><ul class="checks"><li>${icon("check")} Tiers-payant selon les conditions de votre organisme</li><li>${icon("check")} Vérification de vos droits à l’accueil, avant les soins</li><li>${icon("check")} Un éventuel reste à charge vous est annoncé clairement</li></ul><div class="insurance-chips">${list.map((x) => `<span class="chip">${icon("card")}${esc(x)}</span>`).join("")}</div></div><div class="insurance-panel"><img class="insurance-photo" src="/static/img/accueil-assurances.jpg" alt="Accueil de la clinique accompagnant un patient avec ses documents d’assurance" loading="lazy" decoding="async"><h3>Documents à fournir</h3><ol class="insurance-docs"><li>Le bon de consultation ou la prise en charge délivré par votre organisme</li><li>Votre carte d’assuré ou de mutuelle en cours de validité</li><li>Une pièce d’identité</li></ol><p class="legal-note">Sans ces documents, la consultation est réglée sur place puis remboursée selon les règles de votre organisme. La liste des organismes conventionnés est tenue à jour par la clinique.</p></div></div></section>`;
 }
 function home() {
-  return `<section class="hero"><div class="container hero-grid"><div class="hero-copy"><div class="location-pill"><span class="dot"></span> À VOS CÔTÉS, À DALOA</div><h1>Votre santé,<br><em>notre priorité.</em></h1><p>À chaque étape, une attention qui fait la différence. La Clinique Tchiva vous accueille à Tazibouo, au plus près de vous et de votre famille.</p><div class="hero-actions"><a class="btn" href="/rendez-vous" data-link>Prendre rendez-vous ${icon("arrow")}</a><a class="btn secondary" href="/clinique" data-link>Découvrir la clinique</a></div><div class="hero-note">${icon("shield")} Une demande simple. Vos informations restent confidentielles.</div></div><div class="hero-visual"><img class="hero-photo" src="/static/hero-clinic.jpg" alt="Illustration d’une professionnelle de santé dans un cadre accueillant" fetchpriority="high"><span class="photo-tag">${icon("heart")} L’humain au cœur du soin</span><div class="care-float"><div class="symbol">${icon("stethoscope")}</div><div><strong>Proches de vous.</strong><span>À Tazibouo, au cœur de Daloa.</span></div></div><small class="photo-caption">Visuel d’illustration généré par IA · ne représente pas l’équipe</small></div></div></section><section class="info-strip" aria-label="Informations pratiques"><div class="container"><a class="info-item" href="/contact" data-link>${icon("pin")}<div><strong>Facile à trouver</strong><span>Tazibouo, en face du Collège La Paix</span></div></a><a class="info-item" href="/contact" data-link>${icon("clock")}<div><strong>Préparez votre visite</strong><span>${S.hours ? "Consulter nos horaires d’accueil" : "Horaires à confirmer auprès de l’accueil"}</span></div></a><a class="info-item" href="/rendez-vous" data-link>${icon("calendar")}<div><strong>Un rendez-vous, simplement</strong><span>Faites votre demande en ligne</span></div></a></div></section><section class="section"><div class="container"><div class="section-head"><div><div class="eyebrow">À CHAQUE BESOIN, UNE ÉCOUTE</div><h2>Comment pouvons-nous<br>vous accompagner ?</h2></div><a class="text-link" href="/services" data-link>Découvrir nos services ${icon("arrow")}</a></div><div class="cards">${[
+  return `<section class="hero"><div class="container hero-grid"><div class="hero-copy"><div class="location-pill"><span class="dot"></span> À VOS CÔTÉS, À DALOA</div><h1>Votre santé,<br><em>notre priorité.</em></h1><p>À chaque étape, une attention qui fait la différence. La Clinique Tchiva vous accueille à Tazibouo, au plus près de vous et de votre famille.</p><div class="hero-actions"><a class="btn" href="/rendez-vous" data-link>Prendre rendez-vous ${icon("arrow")}</a><a class="btn secondary" href="/clinique" data-link>Découvrir la clinique</a></div><div class="hero-note">${icon("shield")} Une demande simple. Vos informations restent confidentielles.</div></div><div class="hero-visual"><img class="hero-photo" src="/static/hero-clinic.jpg" alt="Illustration d’une professionnelle de santé dans un cadre accueillant" fetchpriority="high"><span class="photo-tag">${icon("heart")} L’humain au cœur du soin</span><div class="care-float"><div class="symbol">${icon("stethoscope")}</div><div><strong>Proches de vous.</strong><span>À Tazibouo, au cœur de Daloa.</span></div></div><small class="photo-caption">Visuel d’illustration généré par IA · ne représente pas l’équipe</small></div></div></section><section class="info-strip" aria-label="Informations pratiques"><div class="container info-four"><a class="info-item" href="/contact" data-link>${icon("pin")}<div><strong>Facile à trouver</strong><span>Tazibouo, en face du Collège La Paix</span></div></a><a class="info-item urgent" href="${telHref(emergencyPhone())}">${icon("siren")}<div><strong>Urgences 24h/24</strong><span>${esc(emergencyPhone())}</span></div></a><a class="info-item" href="/contact" data-link>${icon("clock")}<div><strong>Préparez votre visite</strong><span>${S.hours ? "Consulter nos horaires d’accueil" : "Horaires à confirmer auprès de l’accueil"}</span></div></a><a class="info-item" href="/rendez-vous" data-link>${icon("calendar")}<div><strong>Un rendez-vous, simplement</strong><span>Faites votre demande en ligne</span></div></a></div></section><section class="section"><div class="container"><div class="section-head"><div><div class="eyebrow">À CHAQUE BESOIN, UNE ÉCOUTE</div><h2>Comment pouvons-nous<br>vous accompagner ?</h2></div><a class="text-link" href="/services" data-link>Découvrir nos services ${icon("arrow")}</a></div><div class="cards">${[
     [
       "01",
       "stethoscope",
@@ -239,7 +489,7 @@ function home() {
     )
     .join(
       "",
-    )}</div></div></section><section class="section sage"><div class="container about-grid"><div class="about-art" aria-hidden="true"><img class="about-logo" src="/static/logo.png" alt="" onerror="this.onerror=null;this.src='/static/favicon.svg'"><div class="about-badge"><div><strong>Votre clinique de proximité</strong><span>Daloa · Tazibouo</span></div>${icon("pin")}</div></div><div><div class="eyebrow">BIENVENUE À LA CLINIQUE TCHIVA</div><h2>Une attention sincère.<br>Une relation de confiance.</h2><p>${esc(S.about)}</p><ul class="checks"><li>${icon("check")} Une localisation accessible à Tazibouo</li><li>${icon("check")} Des demandes de rendez-vous simplifiées</li><li>${icon("check")} Le respect de vos informations personnelles</li></ul><a href="/clinique" data-link class="text-link">Mieux nous connaître ${icon("arrow")}</a></div></div></section><section class="section"><div class="container"><div class="eyebrow">VOTRE PARCOURS, EN TOUTE SIMPLICITÉ</div><h2>Votre prochaine visite,<br>en trois étapes.</h2><div class="steps">${[
+    )}</div></div></section>${servicesPreview()}<section class="section sage"><div class="container about-grid"><div class="about-art" aria-hidden="true"><img class="about-logo" src="/static/logo.png" alt="" onerror="this.onerror=null;this.src='/static/favicon.svg'"><div class="about-badge"><div><strong>Votre clinique de proximité</strong><span>Daloa · Tazibouo</span></div>${icon("pin")}</div></div><div><div class="eyebrow">BIENVENUE À LA CLINIQUE TCHIVA</div><h2>Une attention sincère.<br>Une relation de confiance.</h2><p>${esc(S.about)}</p><ul class="checks"><li>${icon("check")} Une localisation accessible à Tazibouo</li><li>${icon("check")} Des demandes de rendez-vous simplifiées</li><li>${icon("check")} Le respect de vos informations personnelles</li></ul><a href="/clinique" data-link class="text-link">Mieux nous connaître ${icon("arrow")}</a></div></div></section><section class="section"><div class="container"><div class="eyebrow">VOTRE PARCOURS, EN TOUTE SIMPLICITÉ</div><h2>Votre prochaine visite,<br>en trois étapes.</h2><div class="steps">${[
     [
       "01",
       "Faites votre demande",
@@ -262,24 +512,23 @@ function home() {
     )
     .join(
       "",
-    )}</div></div></section><section class="section" style="padding-top:0"><div class="container">${cta()}</div></section>`;
+    )}</div></div></section>${insurancesSection()}<section class="section" style="padding-top:0"><div class="container">${cta()}</div></section>`;
 }
 function clinic() {
-  return `${pageHero("La clinique", "Proches de vous.<br><em>À l’écoute de votre santé.</em>", "Découvrez la Clinique Tchiva, votre point de rencontre santé à Tazibouo, dans la ville de Daloa.")}<section class="section"><div class="container about-grid"><div><div class="eyebrow">NOTRE CLINIQUE</div><h2>Au cœur de Daloa,<br>au plus près de vous.</h2><p style="white-space:pre-line">${esc(S.about)}</p><p class="text-small">Les informations sur les spécialités et les praticiens sont publiées après validation par la direction de la clinique.</p><a class="btn" href="/contact" data-link>Nous rendre visite ${icon("arrow")}</a></div><div class="about-art"><img class="about-logo" src="/static/logo.png" alt="Logo de la Clinique Tchiva" onerror="this.onerror=null;this.src='/static/favicon.svg'"><div class="about-badge"><div><strong>${esc(S.address)}</strong><span>${esc(S.city)}, Côte d’Ivoire</span></div>${icon("pin")}</div></div></div></section><section class="section sage"><div class="container"><div class="eyebrow">BIEN PRÉPARER VOTRE VISITE</div><h2>Quelques repères utiles.</h2><div class="faq"><details><summary>Comment prendre rendez-vous ?</summary><p>Remplissez le formulaire en ligne. Il s’agit d’une demande : votre rendez-vous est confirmé uniquement après validation par la clinique.</p></details><details><summary>Où se trouve la clinique ?</summary><p>${esc(S.address)}, ${esc(S.city)}. L’itinéraire est disponible sur la page Contact. Le point exact de la carte reste à vérifier par la clinique.</p></details><details><summary>Quels documents apporter ?</summary><p>Préparez vos documents d’identité et, si vous en disposez, vos précédentes ordonnances et résultats d’examens. Contactez l’accueil pour les consignes adaptées à votre consultation.</p></details><details><summary>Puis-je utiliser ce formulaire pour une urgence ?</summary><p>Non. Les demandes en ligne ne sont pas surveillées en permanence. En cas d’urgence, adressez-vous immédiatement au service d’urgence le plus proche.</p></details></div></div></section><section class="section"><div class="container">${cta()}</div></section>`;
+  return `${pageHero("La clinique", "Proches de vous.<br><em>À l’écoute de votre santé.</em>", "Découvrez la Clinique Tchiva, votre point de rencontre santé à Tazibouo, dans la ville de Daloa.")}<section class="section"><div class="container about-grid"><div><div class="eyebrow">NOTRE CLINIQUE</div><h2>Au cœur de Daloa,<br>au plus près de vous.</h2><p style="white-space:pre-line">${esc(S.about)}</p><p class="text-small">Les informations sur les spécialités et les praticiens sont publiées après validation par la direction de la clinique.</p><a class="btn" href="/contact" data-link>Nous rendre visite ${icon("arrow")}</a></div><div class="clinic-photo"><img class="clinic-shot" src="/static/img/clinique-facade.jpg" alt="Façade de la clinique, quartier Tazibouo à Daloa" loading="lazy" decoding="async"><div class="about-badge"><div><strong>${esc(S.address)}</strong><span>${esc(S.city)}, Côte d’Ivoire · Plus Code ${esc(plusCode())}</span></div>${icon("pin")}</div></div></div></section><section class="section"><div class="container emergency-grid"><div class="emergency-photo"><img src="/static/img/urgence-soins.jpg" alt="Couloir de la clinique en soirée, équipe soignante joignable pour les urgences" loading="lazy" decoding="async"></div><div><div class="eyebrow">URGENCES & GARDE</div><h2>Une équipe joignable,<br>jour et nuit.</h2><p>Les urgences médicales sont prises en charge 24h/24, week-ends et jours fériés. Un seul numéro à retenir, celui de la garde.</p><div class="hero-actions"><a class="btn" href="${telHref(emergencyPhone())}">${icon("siren")} Appeler le ${esc(emergencyPhone())}</a><button class="btn secondary" data-phone>${icon("phone")} Voir tous les numéros</button></div><p class="legal-note">En cas d’urgence vitale, appelez sans attendre. Les demandes envoyées par le formulaire ou WhatsApp ne sont pas surveillées en permanence.</p></div></div></section><section class="section sage"><div class="container"><div class="eyebrow">BIEN PRÉPARER VOTRE VISITE</div><h2>Quelques repères utiles.</h2><div class="faq"><details><summary>Comment prendre rendez-vous ?</summary><p>Remplissez le formulaire en ligne. Il s’agit d’une demande : votre rendez-vous est confirmé uniquement après validation par la clinique.</p></details><details><summary>Où se trouve la clinique ?</summary><p>${esc(S.address)}, ${esc(S.city)}. La carte interactive de la page Contact est centrée sur le point GPS exact ${esc(gpsLat())}, ${esc(gpsLng())} (Plus Code ${esc(plusCode())}). Le bouton « Itinéraire » ouvre directement la navigation Google Maps.</p></details><details><summary>Quels documents apporter ?</summary><p>Préparez vos documents d’identité, votre carte d’assuré ou de mutuelle avec le bon de prise en charge, ainsi que vos précédentes ordonnances et résultats d’examens. Les consignes détaillées figurent sur la page Services.</p></details><details><summary>Puis-je utiliser ce formulaire pour une urgence ?</summary><p>Non. Les demandes en ligne ne sont pas surveillées en permanence. En cas d’urgence, appelez le ${esc(emergencyPhone())} ou rendez-vous immédiatement au service d’urgence le plus proche.</p></details></div></div></section><section class="section"><div class="container">${cta()}</div></section>`;
 }
 function services() {
-  return `${pageHero("Nos services", "Des soins qui commencent<br>par une écoute.", "Retrouvez les services et spécialités publiés par la clinique. Pour vérifier une disponibilité ou préparer votre venue, contactez notre accueil.")}<section class="section"><div class="container">${S.specialties.length ? `<div class="cards">${S.specialties.map((s, i) => `<article class="card"><div class="icon-box">${icon(["stethoscope", "heart", "shield", "users"][i % 4])}</div><h3>${esc(s.name)}</h3><p>${esc(s.description || "Renseignez-vous auprès de l’accueil pour connaître les modalités de consultation.")}</p><a href="/rendez-vous" data-link class="text-link">Demander un rendez-vous ${icon("arrow")}</a></article>`).join("")}</div>` : `<div class="empty-state">${icon("stethoscope")}<h3>Notre offre de soins se précise.</h3><p>La liste des services et spécialités est en cours de renseignement par la clinique. Pour connaître les consultations disponibles, rapprochez-vous de l’accueil.</p><a class="btn" href="/contact" data-link>Nous contacter ${icon("arrow")}</a></div>`}<div class="notice mt20">${icon("info")}Les demandes en ligne ne remplacent ni une consultation ni un service d’urgence. Aucun diagnostic ne peut être établi via ce site.</div></div></section><section class="section sage"><div class="container">${cta()}</div></section>`;
+  return `${pageHero("Nos services", "Des soins qui commencent<br>par une écoute.", "Cinq spécialités publiées par la clinique, avec pour chacune les actes réalisés et les consignes pour préparer votre venue.")}<section class="section"><div class="container">${serviceCards()}<div class="notice mt20">${icon("info")}Les demandes en ligne ne remplacent ni une consultation ni un service d’urgence. Aucun diagnostic ne peut être établi via ce site. Pour une urgence, appelez le ${esc(emergencyPhone())}.</div><div class="service-shortcuts"><div><strong>Un doute sur le service à contacter ?</strong><span>L’accueil vous oriente vers la spécialité adaptée.</span></div><div class="hero-actions"><button class="btn small secondary" data-phone>${icon("phone")} Téléphoner</button><button class="btn small ghost" data-whatsapp>${icon("whatsapp")} Écrire sur WhatsApp</button><a class="btn small" href="/rendez-vous" data-link>${icon("calendar")} Rendez-vous</a></div></div></div></section>${insurancesSection(true)}<section class="section sage"><div class="container">${cta()}</div></section>`;
 }
 function team() {
   return `${pageHero("Notre équipe", "Des visages.<br>Une même attention.", "Découvrez les praticiens et leurs spécialités, après validation et publication de leurs profils par la clinique.")}<section class="section"><div class="container">${S.team.length ? `<div class="cards">${S.team.map((p) => `<article class="card"><div class="person-avatar">${esc(initials(p.name))}</div><span class="tag mb20">${esc(p.specialty)}</span><h3>${esc(p.name)}</h3><p>${esc(p.bio || "Contactez l’accueil pour connaître les disponibilités de consultation.")}</p><a class="text-link" href="/rendez-vous" data-link>Demander une consultation ${icon("arrow")}</a></article>`).join("")}</div>` : `<div class="empty-state">${icon("users")}<h3>Faisons bientôt connaissance.</h3><p>Les noms, qualifications et disponibilités de l’équipe médicale seront affichés après validation par la direction. Aucun profil non vérifié n’est présenté.</p><a href="/contact" data-link class="btn secondary">Renseignements auprès de l’accueil ${icon("arrow")}</a></div>`}</div></section><section class="section sage"><div class="container">${cta()}</div></section>`;
 }
 function mapView() {
-  return `<div class="map">${S.map_url ? `<iframe src="${esc(S.map_url)}" title="Carte de localisation de la Clinique Tchiva" loading="lazy" referrerpolicy="no-referrer"></iframe>` : `<svg class="map-art" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" aria-label="Schéma de localisation indicatif, non géographique"><rect width="600" height="400" fill="#edf0e5"/><path d="M0 90h600M0 230h600M120 0v400M430 0v400" stroke="#dce4d3" stroke-width="45"/><path d="M0 90h600M0 230h600M120 0v400M430 0v400" stroke="white" stroke-width="20"/><path d="M-50 400 650-20" stroke="white" stroke-width="25"/><rect x="180" y="100" width="130" height="65" rx="6" fill="#d9e5d0"/><circle cx="315" cy="185" r="38" fill="#145c4b" opacity=".08"/><circle cx="315" cy="185" r="21" fill="#145c4b"/><path d="M310 175h10v5h5v10h-5v5h-10v-5h-5v-10h5z" fill="white"/><text x="315" y="230" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#145c4b">Tazibouo · Daloa</text><text x="300" y="48" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#788571">SCHÉMA INDICATIF · PAS UN PLAN GÉOGRAPHIQUE</text></svg><div class="map-card"><strong>Tazibouo · En face du Collège La Paix</strong><small>Repère Plus Code : WH48+HFJ Daloa</small></div>`}</div>`;
+  return `<div class="map"><iframe src="${esc(mapEmbedUrl())}" title="Carte interactive Google Maps de la Clinique Tchiva, Tazibouo, Daloa" loading="lazy" referrerpolicy="no-referrer" allowfullscreen></iframe><div class="map-card"><div class="map-card-icon">${icon("pin")}</div><div class="map-card-text"><strong>${esc(S.address)}</strong><small>${esc(S.city)}, Côte d’Ivoire · Plus Code ${esc(plusCode())}</small><small class="map-gps">GPS ${esc(gpsLat())}, ${esc(gpsLng())}</small></div></div></div><div class="map-actions"><a class="btn" href="${mapDirectionsUrl()}" target="_blank" rel="noopener noreferrer">${icon("external")} Itinéraire vers la clinique</a><a class="btn secondary" href="${mapPointUrl()}" target="_blank" rel="noopener noreferrer">${icon("grid")} Ouvrir dans Google Maps</a></div>`;
 }
-const mapsLink = () =>
-  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent("WH48+HFJ Daloa")}`;
 function contact() {
-  return `${pageHero("Contact & accès", "Une question ?<br>Parlons-en.", "Retrouvez les informations pratiques pour organiser votre visite à la Clinique Tchiva.")}<section class="section"><div class="container contact-grid"><div><div class="contact-line">${icon("pin")}<div><h3>Notre adresse</h3><p>${esc(S.address)}<br>${esc(S.city)}, Côte d’Ivoire</p></div></div><div class="contact-line">${icon("clock")}<div><h3>Horaires d’accueil</h3><p>${esc(S.hours || "Horaires à compléter par la clinique. Merci de vérifier les disponibilités avant de vous déplacer.")}</p></div></div><div class="contact-line">${icon("phone")}<div><h3>Téléphone & Contacts</h3><div class="contact-numbers"><p><strong>Standard :</strong> <a href="tel:+2252724375080">+225 27 24 37 50 80</a></p><p><strong>Urgences & Mobile :</strong> <a href="tel:+2250788975516">+225 07 88 97 55 16</a></p><p><strong>Mobile :</strong> <a href="tel:+2250707995414">+225 07 07 99 54 14</a></p><p><strong>Mobile :</strong> <a href="tel:+2250505819444">+225 05 05 81 94 44</a></p></div></div></div>${S.email ? `<div class="contact-line">${icon("mail")}<div><h3>E-mail</h3><p><a href="mailto:${esc(S.email)}">${esc(S.email)}</a></p></div></div>` : ""}<div class="hero-actions mt20"><button class="btn" data-whatsapp>${icon("chat")} Écrire sur WhatsApp</button><a class="btn secondary" href="/rendez-vous" data-link>Un rendez-vous ${icon("arrow")}</a></div></div><div>${mapView()}<a class="btn secondary mt20" href="${mapsLink()}" target="_blank" rel="noopener noreferrer">Rechercher l’itinéraire sur Google Maps ${icon("external")}</a><p class="legal-note">La recherche Google Maps s’ouvre sur un site externe. Vérifiez le point d’arrivée ; la fiche et l’emplacement exact devront être validés par la clinique.</p><div class="notice warning">${icon("info")}En cas d’urgence, ne passez pas par le formulaire ou WhatsApp. Rendez-vous immédiatement au service d’urgence le plus proche.</div></div></div></section>`;
+  const reception = receptionPhones();
+  return `${pageHero("Contact & accès", "Une question ?<br>Parlons-en.", "Adresse exacte, numéros utiles, horaires et prise en charge assurance : tout pour préparer votre visite à la Clinique Tchiva.")}<section class="section"><div class="container contact-grid"><div><div class="contact-line">${icon("pin")}<div><h3>Notre adresse</h3><p>${esc(S.address)}<br>${esc(S.city)}, Côte d’Ivoire<br><small class="contact-sub">Plus Code ${esc(plusCode())} · GPS ${esc(gpsLat())}, ${esc(gpsLng())}</small></p></div></div><div class="contact-line">${icon("clock")}<div><h3>Horaires d’accueil</h3><p>${esc(S.hours || "Horaires à compléter par la clinique. Merci de vérifier les disponibilités avant de vous déplacer.")}</p><small class="contact-sub">Urgences et garde assurées 24h/24, week-ends et jours fériés.</small></div></div><div class="contact-line">${icon("phone")}<div><h3>Téléphone & contacts</h3><div class="contact-numbers"><p><strong>Standard fixe :</strong> <a href="${telHref(landlinePhone())}">${esc(landlinePhone())}</a></p><p class="urgent-line">${icon("siren")}<strong>Urgences & garde 24h/24 :</strong> <a href="${telHref(emergencyPhone())}">${esc(emergencyPhone())}</a></p><p><strong>Accueil & renseignements :</strong> ${reception.map((n) => `<a href="${telHref(n)}">${esc(n)}</a>`).join(" · ")}</p></div><button class="btn small secondary mt20" data-phone>${icon("phone")} Téléphoner — choisir le poste</button></div></div>${S.email ? `<div class="contact-line">${icon("mail")}<div><h3>E-mail</h3><p><a href="mailto:${esc(S.email)}">${esc(S.email)}</a></p></div></div>` : ""}<div class="hero-actions mt20"><button class="btn" data-whatsapp>${icon("whatsapp")} Écrire sur WhatsApp</button><a class="btn secondary" href="/rendez-vous" data-link>Un rendez-vous ${icon("arrow")}</a></div></div><div>${mapView()}<p class="legal-note">La carte interactive et l’itinéraire sont fournis par Google Maps, un service externe. Vérifiez le point d’arrivée avant de partir.</p><div class="notice warning">${icon("siren")}<div>En cas d’urgence, appelez directement le <strong>${esc(emergencyPhone())}</strong>. Le formulaire en ligne et WhatsApp ne sont pas surveillés en permanence.</div></div></div></div></section>${insurancesSection(true)}<section class="section sage"><div class="container">${cta()}</div></section>`;
 }
 const field = (
   label,
@@ -323,7 +572,7 @@ function booking() {
     )}</div><div class="notice warning">${icon("info")}La demande ne vaut pas confirmation de rendez-vous.</div><div class="aside-details"><hr style="border:0;border-top:1px solid var(--line);margin:25px 0"><div class="text-small">${icon("pin")} ${esc(S.address)}<br>${esc(S.city)}, Côte d’Ivoire</div></div></aside></div></section>`;
 }
 function legal(privacy) {
-  return `${pageHero(privacy ? "Confidentialité" : "Mentions légales", privacy ? "Vos données,<br>avec attention." : "Informations légales.", privacy ? "Comprendre l’utilisation de vos coordonnées et exercer vos droits." : "Informations sur l’éditeur du site et ses conditions d’utilisation.")}<section class="section"><div class="container prose">${privacy ? `<div class="notice warning">${icon("info")}Cette politique doit être validée et complétée par la direction avant l’ouverture du site à de vrais patients.</div><h2>1. Responsable du traitement</h2><p>${esc(S.name)}, ${esc(S.address)}, ${esc(S.city)}, Côte d’Ivoire. Contact pour les données personnelles : ${esc(S.privacy_contact || S.email || "à compléter par la clinique ; vous pouvez vous présenter à l’accueil")}.</p><h2>2. Informations collectées</h2><p>Le formulaire recueille votre nom, téléphone, service ou praticien souhaité, date et heure préférées, ainsi que votre choix concernant les rappels. Ne communiquez pas de symptômes, résultats d’examens ou autres informations médicales via ce formulaire.</p><h2>3. Utilisation et accès</h2><p>Ces informations permettent à l’accueil et au personnel habilité d’organiser les rendez-vous. Les consultations et encaissements sont réservés aux rôles autorisés. Aucune publicité ciblée et aucun outil d’analyse publicitaire ne sont installés.</p><h2>4. Consentement aux rappels</h2><p>Les rappels sont facultatifs. Votre refus n’empêche pas une demande. L’envoi automatique n’est pas activé : un membre habilité peut préparer un rappel, puis l’envoyer manuellement après vérification du consentement. Vous pouvez retirer ce consentement à l’accueil.</p><h2>5. Durée de conservation</h2><p>Durée cible proposée pour les demandes sans suivi : ${esc(S.retention_days || 180)} jours après la dernière interaction. La clinique doit valider sa politique de conservation et réaliser les suppressions ; aucun effacement automatique n’est actuellement activé. Les données comptables et les dossiers de soins suivent des obligations spécifiques à faire valider avant exploitation.</p><h2>6. Sécurité et prestataires</h2><p>L’espace de gestion utilise des comptes individuels, des droits d’accès et une journalisation. Les noms et téléphones des patients sont chiffrés dans la base. Le chiffrement HTTPS, les sauvegardes, l’hébergeur et les formalités réglementaires doivent être vérifiés avant la mise en production.</p><p>WhatsApp et Google Maps ne se chargent pas automatiquement, sauf si la clinique configure une carte intégrée Google. Un clic vers ces services vous fait quitter le site et vous soumet à leurs politiques de confidentialité.</p><h2>7. Vos droits</h2><p>Pour demander l’accès, la rectification, la suppression de vos données ou retirer votre consentement, contactez l’accueil. La clinique vérifie votre identité et les obligations de conservation avant de traiter la demande. Le cadre applicable en Côte d’Ivoire et les formalités auprès de l’autorité compétente doivent être validés par la direction.</p><h2>8. Cookies</h2><p>Seul un cookie de session technique est utilisé lors de la connexion à l’espace de gestion. Il expire après 8 heures. Aucun cookie publicitaire n’est installé.</p>` : `<h2>Éditeur</h2><p>${esc(S.name)}<br>${esc(S.address)}<br>${esc(S.city)}, Côte d’Ivoire<br>${S.phone ? esc(S.phone) : "Téléphone : à compléter"}<br>${S.email ? esc(S.email) : "Adresse e-mail : à compléter"}</p><h2>Informations à finaliser avant publication</h2><ul><li>Raison sociale et forme juridique, numéro d’immatriculation et autorisations applicables.</li><li>Identité du responsable de publication.</li><li>Hébergeur : nom, adresse et coordonnées.</li><li>Contact pour la protection des données et modalités d’exercice des droits.</li></ul><h2>Informations de santé</h2><p>Les contenus du site sont informatifs. Ils ne remplacent pas une consultation médicale. Aucun rendez-vous n’est confirmé par le seul envoi d’une demande. En cas d’urgence, adressez-vous au service d’urgence le plus proche.</p><h2>Visuels et contenus</h2><p>Le visuel de la page d’accueil est une illustration générée par intelligence artificielle. Il ne représente pas un membre de l’équipe ni les locaux réels de la clinique. Les noms et qualifications des praticiens seront publiés uniquement après validation par la clinique.</p><h2>Disponibilité du site</h2><p>La clinique ne peut pas garantir la surveillance permanente des demandes en ligne. Vérifiez les coordonnées et horaires avant votre déplacement.</p>`}</div></section>`;
+  return `${pageHero(privacy ? "Confidentialité" : "Mentions légales", privacy ? "Vos données,<br>avec attention." : "Informations légales.", privacy ? "Comprendre l’utilisation de vos coordonnées et exercer vos droits." : "Informations sur l’éditeur du site et ses conditions d’utilisation.")}<section class="section"><div class="container prose">${privacy ? `<div class="notice warning">${icon("info")}Cette politique doit être validée et complétée par la direction avant l’ouverture du site à de vrais patients.</div><h2>1. Responsable du traitement</h2><p>${esc(S.name)}, ${esc(S.address)}, ${esc(S.city)}, Côte d’Ivoire. Contact pour les données personnelles : ${esc(S.privacy_contact || S.email || "à compléter par la clinique ; vous pouvez vous présenter à l’accueil")}.</p><h2>2. Informations collectées</h2><p>Le formulaire recueille votre nom, téléphone, service ou praticien souhaité, date et heure préférées, ainsi que votre choix concernant les rappels. Ne communiquez pas de symptômes, résultats d’examens ou autres informations médicales via ce formulaire.</p><h2>3. Utilisation et accès</h2><p>Ces informations permettent à l’accueil et au personnel habilité d’organiser les rendez-vous. Les consultations et encaissements sont réservés aux rôles autorisés. Aucune publicité ciblée et aucun outil d’analyse publicitaire ne sont installés.</p><h2>4. Consentement aux rappels</h2><p>Les rappels sont facultatifs. Votre refus n’empêche pas une demande. L’envoi automatique n’est pas activé : un membre habilité peut préparer un rappel, puis l’envoyer manuellement après vérification du consentement. Vous pouvez retirer ce consentement à l’accueil.</p><h2>5. Durée de conservation</h2><p>Durée cible proposée pour les demandes sans suivi : ${esc(S.retention_days || 180)} jours après la dernière interaction. La clinique doit valider sa politique de conservation et réaliser les suppressions ; aucun effacement automatique n’est actuellement activé. Les données comptables et les dossiers de soins suivent des obligations spécifiques à faire valider avant exploitation.</p><h2>6. Sécurité et prestataires</h2><p>L’espace de gestion utilise des comptes individuels, des droits d’accès et une journalisation. Les noms et téléphones des patients sont chiffrés dans la base. Le chiffrement HTTPS, les sauvegardes, l’hébergeur et les formalités réglementaires doivent être vérifiés avant la mise en production.</p><p>La carte Google Maps de la page Contact est intégrée au site et chargée par Google. Les liens WhatsApp et d’itinéraire ne s’ouvrent que sur votre action et vous font quitter le site : vous êtes alors soumis aux politiques de confidentialité de ces services.</p><h2>7. Vos droits</h2><p>Pour demander l’accès, la rectification, la suppression de vos données ou retirer votre consentement, contactez l’accueil. La clinique vérifie votre identité et les obligations de conservation avant de traiter la demande. Le cadre applicable en Côte d’Ivoire et les formalités auprès de l’autorité compétente doivent être validés par la direction.</p><h2>8. Cookies</h2><p>Seul un cookie de session technique est utilisé lors de la connexion à l’espace de gestion. Il expire après 8 heures. Aucun cookie publicitaire n’est installé.</p>` : `<h2>Éditeur</h2><p>${esc(S.name)}<br>${esc(S.address)}<br>${esc(S.city)}, Côte d’Ivoire<br>${S.phone ? esc(S.phone) : "Téléphone : à compléter"}<br>${S.email ? esc(S.email) : "Adresse e-mail : à compléter"}</p><h2>Informations à finaliser avant publication</h2><ul><li>Raison sociale et forme juridique, numéro d’immatriculation et autorisations applicables.</li><li>Identité du responsable de publication.</li><li>Hébergeur : nom, adresse et coordonnées.</li><li>Contact pour la protection des données et modalités d’exercice des droits.</li></ul><h2>Informations de santé</h2><p>Les contenus du site sont informatifs. Ils ne remplacent pas une consultation médicale. Aucun rendez-vous n’est confirmé par le seul envoi d’une demande. En cas d’urgence, adressez-vous au service d’urgence le plus proche.</p><h2>Visuels et contenus</h2><p>Les visuels des pages d’accueil, clinique, services et assurances sont des illustrations générées par intelligence artificielle. Ils ne représentent ni un membre de l’équipe ni les locaux réels de la clinique. Les noms et qualifications des praticiens seront publiés uniquement après validation par la clinique.</p><h2>Carte et services externes</h2><p>La carte interactive et le bouton d’itinéraire sont fournis par Google Maps ; WhatsApp est un service externe. Ces services se chargent uniquement après votre action et sont soumis à leurs propres conditions de confidentialité.</p><h2>Disponibilité du site</h2><p>La clinique ne peut pas garantir la surveillance permanente des demandes en ligne. Vérifiez les coordonnées et horaires avant votre déplacement.</p>`}</div></section>`;
 }
 async function render() {
   const isAdmin = route.startsWith("/gestion");
@@ -364,6 +613,7 @@ async function render() {
     );
   });
   $$("[data-whatsapp],#whatsapp-float").forEach((b) => (b.onclick = whatsapp));
+  $$("[data-phone]").forEach((b) => (b.onclick = phoneMenu));
   if (route === "/rendez-vous") bindBooking();
 }
 function bindBooking() {
@@ -443,9 +693,11 @@ function modal(title, body) {
   setTimeout(
     () =>
       (
-        $(".modal input:not([type=checkbox]),.modal select,.modal-close") ||
+        $(".modal input:not([type=checkbox]),.modal select") ||
+        $(".modal .modal-close") ||
+        $(".modal button:not([disabled]),.modal a[href]") ||
         $(".modal")
-      ).focus(),
+      )?.focus?.(),
     20,
   );
 }
@@ -1212,12 +1464,20 @@ async function settingsTab() {
   const s = adminSettings,
     el = $("#settings-content");
   if (tab === "general") {
-    el.innerHTML = `<div class="settings-layout"><section class="panel"><h3>Informations essentielles</h3><p class="text-small">Les champs vides restent signalés comme « à compléter » sur le site.</p><form id="settings-form">${errorBox}<div class="form-grid">${field("Nom de la clinique", "name", "text", s.name, 'required minlength="2" maxlength="100"')}${field("Ville", "city", "text", s.city, "required")}${field("Adresse / repère", "address", "text", s.address, "required", true)}${field("Téléphone", "phone", "tel", s.phone, 'placeholder="+225…"')}${field("Numéro WhatsApp", "whatsapp", "tel", s.whatsapp, 'placeholder="+225…"')}${field("Adresse e-mail", "email", "email", s.email)}${field("Contact protection des données", "privacy_contact", "text", s.privacy_contact)}${textarea("Horaires d’accueil", "hours", s.hours, 'maxlength="1000" placeholder="Indiquez les jours et horaires validés"')}${textarea("Présentation de la clinique", "about", s.about, 'maxlength="2500"')}${field("URL d’intégration Google Maps (facultatif)", "map_url", "url", s.map_url, 'placeholder="https://www.google.com/maps/embed?..."', true)}<div class="field full"><small>Obtenez cette URL depuis Google Maps → Partager → Intégrer une carte. Vérifiez le point exact. Cette intégration charge un service externe.</small></div>${field("Durée cible des demandes sans suivi (jours)", "retention_days", "number", s.retention_days, 'required min="30" max="3650"')}<div class="field full"><small>Cette durée est informative ; aucune suppression automatique. Validez les obligations applicables avant de supprimer des données.</small></div></div><div class="form-actions"><button class="btn" type="submit">Enregistrer les modifications ${icon("check")}</button></div></form></section><aside class="help-card"><h3>${icon("help")} À votre rythme.</h3><p>Pas besoin de modifier le code du site.</p><ol><li>Renseignez vos coordonnées officielles.</li><li>Indiquez les horaires vérifiés.</li><li>Enregistrez pour mettre à jour le site.</li><li>Contrôlez l’affichage sur la page Contact.</li></ol><a href="/gestion/formation" data-link class="text-link">Ouvrir le guide ${icon("arrow")}</a></aside></div>`;
+    el.innerHTML = `<div class="settings-layout"><section class="panel"><h3>Informations essentielles</h3><p class="text-small">Les champs vides restent signalés comme « à compléter » sur le site.</p><form id="settings-form">${errorBox}<div class="form-grid">${field("Nom de la clinique", "name", "text", s.name, 'required minlength="2" maxlength="100"')}${field("Ville", "city", "text", s.city, "required")}${field("Adresse / repère", "address", "text", s.address, "required", true)}${field("Téléphone", "phone", "tel", s.phone, 'placeholder="+225…"')}${field("Numéro WhatsApp", "whatsapp", "tel", s.whatsapp, 'placeholder="+225…"')}${field("Numéro des urgences 24h/24", "emergency_phone", "tel", s.emergency_phone, 'placeholder="+225…"')}${field("Accueil & renseignements (plusieurs numéros séparés par une virgule)", "reception_phones", "text", (s.reception_phones || []).join(", "), 'placeholder="+225 07 07 99 54 14, +225 05 05 81 94 44"', true)}${field("Adresse e-mail", "email", "email", s.email)}${field("Contact protection des données", "privacy_contact", "text", s.privacy_contact)}${textarea("Horaires d’accueil", "hours", s.hours, 'maxlength="1000" placeholder="Indiquez les jours et horaires validés"')}${textarea("Présentation de la clinique", "about", s.about, 'maxlength="2500"')}${field("URL d’intégration Google Maps (facultatif)", "map_url", "url", s.map_url, 'placeholder="https://www.google.com/maps?q=6.90645,-6.43381&output=embed"', true)}<div class="field full"><small>URL chargée dans la carte de la page Contact. Par défaut : <code>https://www.google.com/maps?q=6.90645,-6.43381&amp;output=embed</code>. Le bouton d’itinéraire utilise les coordonnées ci-dessous.</small></div>${field("Plus Code", "plus_code", "text", s.plus_code, 'placeholder="WH48+HFJ Daloa"')}${field("Latitude GPS", "latitude", "text", s.latitude, 'placeholder="6.90645"')}${field("Longitude GPS", "longitude", "text", s.longitude, 'placeholder="-6.43381"')}<div class="field full"><small>Coordonnées exactes de la clinique, utilisées pour la carte et le bouton « Itinéraire ». Aucun schéma de remplacement n’est affiché : la carte réelle reste toujours prioritaire.</small></div>${field("Assurances & mutuelles conventionnées (séparées par une virgule)", "insurances", "text", (s.insurances || []).join(", "), 'placeholder="CNAM, ASCOMA, SANLAM, AXA, GMC, MUGEF-CI"', true)}${field("Durée cible des demandes sans suivi (jours)", "retention_days", "number", s.retention_days, 'required min="30" max="3650"')}<div class="field full"><small>Cette durée est informative ; aucune suppression automatique. Validez les obligations applicables avant de supprimer des données.</small></div></div><div class="form-actions"><button class="btn" type="submit">Enregistrer les modifications ${icon("check")}</button></div></form></section><aside class="help-card"><h3>${icon("help")} À votre rythme.</h3><p>Pas besoin de modifier le code du site.</p><ol><li>Renseignez vos coordonnées officielles.</li><li>Indiquez les horaires vérifiés.</li><li>Enregistrez pour mettre à jour le site.</li><li>Contrôlez l’affichage sur la page Contact.</li></ol><a href="/gestion/formation" data-link class="text-link">Ouvrir le guide ${icon("arrow")}</a></aside></div>`;
     $("#settings-form").onsubmit = (e) => {
       e.preventDefault();
       submit(e.target, async () => {
         const d = Object.fromEntries(new FormData(e.target));
         d.retention_days = Number(d.retention_days);
+        d.reception_phones = String(d.reception_phones || "")
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean);
+        d.insurances = String(d.insurances || "")
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean);
         adminSettings = { ...s, ...d };
         await persistSettings();
       });
@@ -1312,7 +1572,9 @@ async function settingsTab() {
         s.team.some((x) => x.published),
         "Profils et qualifications médicales validés",
       ],
-      [!!s.map_url, "Point Google Maps exact validé"],
+      [!!s.emergency_phone, "Numéro des urgences 24h/24 renseigné"],
+      [!!s.map_url && !!s.latitude && !!s.longitude, "Carte Google Maps et coordonnées GPS exactes validées"],
+      [!!(s.insurances && s.insurances.length), "Assurances et mutuelles conventionnées listées"],
       [!!s.privacy_contact, "Contact pour la protection des données renseigné"],
     ]
       .map(
@@ -1436,7 +1698,7 @@ async function trainingPage() {
       "Bienvenue dans votre nouvel outil.",
       "Une prise en main en 15 minutes, pour aller à l’essentiel.",
     ) +
-    `<div class="notice mb20">${icon("help")}Ce guide constitue le support de formation courte. Un administrateur doit accompagner le personnel lors de la première utilisation.</div><div class="panel prose" style="max-width:none"><div class="eyebrow">01 · METTRE LE SITE À JOUR · 3 MIN</div><h3>Vos informations, sans toucher au code.</h3><ol class="text-small muted"><li>Ouvrez <strong>Paramètres → Informations</strong> avec un compte administrateur.</li><li>Modifiez le téléphone, le numéro WhatsApp avec l’indicatif +225, l’adresse et les horaires.</li><li>Cliquez sur <strong>Enregistrer les modifications</strong>. Vérifiez la page Contact du site public.</li><li>Dans <strong>Services & équipe</strong>, ajoutez un service ou un praticien vérifié. Sans « Publier », l’élément reste en brouillon.</li></ol><hr style="border:0;border-top:1px solid var(--line);margin:30px 0"><div class="eyebrow">02 · GÉRER UN RENDEZ-VOUS · 4 MIN</div><h3>Du premier contact à la consultation.</h3><ol class="text-small muted"><li>Dans <strong>Rendez-vous</strong>, filtrez « À confirmer » et ouvrez une demande avec le crayon.</li><li>Vérifiez la date, l’heure et le praticien. Choisissez « Confirmé » et prévenez le patient.</li><li>Consultez la vue <strong>Calendrier</strong>. Un créneau confirmé ne peut pas être attribué deux fois au même praticien.</li><li>Si le patient a consenti aux rappels, cliquez sur la cloche. Vérifiez le numéro et le texte puis ouvrez WhatsApp. <strong>L’envoi est manuel, pas automatique.</strong></li><li>Pour annuler, modifiez le statut en « Annulé ». En cas de retrait du consentement, ouvrez la demande et utilisez « Enregistrer le retrait du consentement » avant tout nouvel envoi.</li></ol><hr style="border:0;border-top:1px solid var(--line);margin:30px 0"><div class="eyebrow">03 · CONSULTATIONS & ENCAISSEMENTS · 3 MIN</div><h3>Une saisie, sans double encaissement.</h3><ol class="text-small muted"><li>Avec le rôle médical ou administrateur, ouvrez <strong>Consultations → Nouvelle consultation</strong>.</li><li>Liez éventuellement un rendez-vous, renseignez la prestation et les montants.</li><li>Le montant encaissé est ajouté automatiquement aux recettes. Ne le ressaisissez pas dans Finances.</li><li>Pour un paiement ultérieur, utilisez le bouton « + » à côté du solde restant.</li><li>Ce registre ne contient pas de dossier clinique. Ne saisissez pas de diagnostics dans les libellés.</li></ol><hr style="border:0;border-top:1px solid var(--line);margin:30px 0"><div class="eyebrow">04 · FINANCES & STOCKS · 3 MIN</div><h3>Garder une vision claire au quotidien.</h3><ol class="text-small muted"><li>Dans <strong>Finances</strong>, ajoutez une dépense avec sa date, son montant et sa catégorie.</li><li>Dans <strong>Stocks & consommables</strong>, créez les articles et leur seuil d’alerte. Utilisez « Entrée / sortie » pour chaque mouvement.</li><li>Une sortie supérieure au stock disponible est refusée.</li><li>Dans <strong>Rapports</strong>, choisissez la période et exportez le CSV. Il s’ouvre dans Excel.</li></ol><hr style="border:0;border-top:1px solid var(--line);margin:30px 0"><div class="eyebrow">05 · LES BONS RÉFLEXES · 2 MIN</div><h3>Protéger les accès et les patients.</h3><ul class="text-small muted"><li>Un compte par personne. N’utilisez jamais un mot de passe partagé.</li><li>Déconnectez-vous en fin de poste. L’administrateur doit désactiver les comptes des personnes qui quittent la clinique.</li><li>Ne saisissez aucune donnée réelle avant la validation de l’hébergement, du HTTPS, des sauvegardes et des formalités de protection des données.</li><li>La direction doit vérifier les données publiées et traiter les demandes de retrait de consentement et de suppression.</li><li>Les liens Google Maps et WhatsApp ouvrent des services externes. N’envoyez pas de données médicales sensibles.</li></ul><div class="notice mt20">${icon("check")}Exercice de validation : modifiez un horaire, créez une demande fictive, confirmez-la, enregistrez une consultation, vérifiez la recette et réalisez un mouvement de stock. Utilisez un environnement de test séparé.</div></div>`;
+    `<div class="notice mb20">${icon("help")}Ce guide constitue le support de formation courte. Un administrateur doit accompagner le personnel lors de la première utilisation.</div><div class="panel prose" style="max-width:none"><div class="eyebrow">01 · METTRE LE SITE À JOUR · 3 MIN</div><h3>Vos informations, sans toucher au code.</h3><ol class="text-small muted"><li>Ouvrez <strong>Paramètres → Informations</strong> avec un compte administrateur.</li><li>Modifiez le téléphone, le numéro WhatsApp et d’urgence avec l’indicatif +225, l’adresse, les coordonnées GPS, les horaires et les assurances conventionnées.</li><li>Cliquez sur <strong>Enregistrer les modifications</strong>. Vérifiez la page Contact du site public.</li><li>Dans <strong>Services & équipe</strong>, ajoutez un service ou un praticien vérifié. Sans « Publier », l’élément reste en brouillon.</li></ol><hr style="border:0;border-top:1px solid var(--line);margin:30px 0"><div class="eyebrow">02 · GÉRER UN RENDEZ-VOUS · 4 MIN</div><h3>Du premier contact à la consultation.</h3><ol class="text-small muted"><li>Dans <strong>Rendez-vous</strong>, filtrez « À confirmer » et ouvrez une demande avec le crayon.</li><li>Vérifiez la date, l’heure et le praticien. Choisissez « Confirmé » et prévenez le patient.</li><li>Consultez la vue <strong>Calendrier</strong>. Un créneau confirmé ne peut pas être attribué deux fois au même praticien.</li><li>Si le patient a consenti aux rappels, cliquez sur la cloche. Vérifiez le numéro et le texte puis ouvrez WhatsApp. <strong>L’envoi est manuel, pas automatique.</strong></li><li>Pour annuler, modifiez le statut en « Annulé ». En cas de retrait du consentement, ouvrez la demande et utilisez « Enregistrer le retrait du consentement » avant tout nouvel envoi.</li></ol><hr style="border:0;border-top:1px solid var(--line);margin:30px 0"><div class="eyebrow">03 · CONSULTATIONS & ENCAISSEMENTS · 3 MIN</div><h3>Une saisie, sans double encaissement.</h3><ol class="text-small muted"><li>Avec le rôle médical ou administrateur, ouvrez <strong>Consultations → Nouvelle consultation</strong>.</li><li>Liez éventuellement un rendez-vous, renseignez la prestation et les montants.</li><li>Le montant encaissé est ajouté automatiquement aux recettes. Ne le ressaisissez pas dans Finances.</li><li>Pour un paiement ultérieur, utilisez le bouton « + » à côté du solde restant.</li><li>Ce registre ne contient pas de dossier clinique. Ne saisissez pas de diagnostics dans les libellés.</li></ol><hr style="border:0;border-top:1px solid var(--line);margin:30px 0"><div class="eyebrow">04 · FINANCES & STOCKS · 3 MIN</div><h3>Garder une vision claire au quotidien.</h3><ol class="text-small muted"><li>Dans <strong>Finances</strong>, ajoutez une dépense avec sa date, son montant et sa catégorie.</li><li>Dans <strong>Stocks & consommables</strong>, créez les articles et leur seuil d’alerte. Utilisez « Entrée / sortie » pour chaque mouvement.</li><li>Une sortie supérieure au stock disponible est refusée.</li><li>Dans <strong>Rapports</strong>, choisissez la période et exportez le CSV. Il s’ouvre dans Excel.</li></ol><hr style="border:0;border-top:1px solid var(--line);margin:30px 0"><div class="eyebrow">05 · LES BONS RÉFLEXES · 2 MIN</div><h3>Protéger les accès et les patients.</h3><ul class="text-small muted"><li>Un compte par personne. N’utilisez jamais un mot de passe partagé.</li><li>Déconnectez-vous en fin de poste. L’administrateur doit désactiver les comptes des personnes qui quittent la clinique.</li><li>Ne saisissez aucune donnée réelle avant la validation de l’hébergement, du HTTPS, des sauvegardes et des formalités de protection des données.</li><li>La direction doit vérifier les données publiées et traiter les demandes de retrait de consentement et de suppression.</li><li>Les liens Google Maps et WhatsApp ouvrent des services externes. N’envoyez pas de données médicales sensibles.</li></ul><div class="notice mt20">${icon("check")}Exercice de validation : modifiez un horaire, créez une demande fictive, confirmez-la, enregistrez une consultation, vérifiez la recette et réalisez un mouvement de stock. Utilisez un environnement de test séparé.</div></div>`;
 }
 // Le même fichier PNG sert partout. Un logo horizontal masque le nom adjacent
 // pour éviter de le répéter si le nom est déjà présent dans le visuel.
